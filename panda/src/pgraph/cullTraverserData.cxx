@@ -105,6 +105,14 @@ apply_transform(const TransformState *node_transform) {
         _cull_planes = _cull_planes->xform(inv_transform->get_mat());
       }
     }
+
+    if (_instances != nullptr) {
+      InstanceList *instances = new InstanceList(*_instances);
+      for (InstanceList::Instance &instance : *instances) {
+        instance.set_transform(instance.get_transform()->compose(node_transform));
+      }
+      _instances = std::move(instances);
+    }
   }
 }
 
