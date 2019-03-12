@@ -19,6 +19,7 @@
 #include "transformState.h"
 #include "pvector.h"
 
+class BitArray;
 class FactoryParams;
 
 /**
@@ -100,6 +101,8 @@ public:
   INLINE iterator end();
   INLINE const_iterator end() const;
   INLINE const_iterator cend() const;
+
+  CPT(InstanceList) without(const BitArray &mask) const;
 
 private:
   Instances _instances;

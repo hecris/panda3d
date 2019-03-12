@@ -15,6 +15,7 @@
 #include "indent.h"
 #include "bamReader.h"
 #include "bamWriter.h"
+#include "bitArray.h"
 
 TypeHandle InstanceList::_type_handle;
 
@@ -55,6 +56,38 @@ InstanceList::
 void InstanceList::
 xform(const LMatrix4 &mat) {
 
+}
+
+/**
+ * Returns an immutable copy without the bits turned on in the indicated mask.
+ */
+CPT(InstanceList) InstanceList::
+without(const BitArray &mask) const {
+  size_t num_instances = size();
+  size_t num_culled = (size_t)mask.get_num_on_bits();
+  if (num_culled == 0) {
+    return this;
+  }
+  else if (num_culled >= num_instances) {
+    static CPT(InstanceList) empty_list;
+    if (empty_list == nullptr) {
+      empty_list = new InstanceList;
+    }
+
+    nassertr(num_culled <= num_instances, empty_list);
+    return empty_list;
+  }
+
+  InstanceList *new_list = new InstanceList;
+  new_list->_instances.reserve(num_instances - num_culled);
+
+  for (size_t i = (size_t)mask.get_lowest_off_bit(); i < num_instances; ++i) {
+    if (!mask.get_bit(i)) {
+      new_list->_instances.push_back(_instances[i]);
+    }
+  }
+
+  return new_list;
 }
 
 /**

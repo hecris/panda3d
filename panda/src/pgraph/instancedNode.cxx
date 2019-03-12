@@ -12,7 +12,6 @@
  */
 
 #include "instancedNode.h"
-#include "omniBoundingVolume.h"
 
 TypeHandle InstancedNode::_type_handle;
 
@@ -52,6 +51,37 @@ InstancedNode::
 PandaNode *InstancedNode::
 make_copy() const {
   return new InstancedNode(*this);
+}
+
+/**
+ * Returns the list of instances.
+ *
+ * Don't call this in a downstream thread unless you don't mind it blowing
+ * away other changes you might have recently made in an upstream thread.
+ */
+PT(InstanceList) InstancedNode::
+modify_instances() {
+  Thread *current_thread = Thread::get_current_thread();
+  CDWriter cdata(_cycler, true, current_thread);
+  PT(InstanceList) instances = cdata->_instances.get_write_pointer();
+  mark_bounds_stale(current_thread->get_pipeline_stage(), current_thread);
+  mark_bam_modified();
+  return instances;
+}
+
+/**
+ * Entirely replaces the list of instances with the given list.
+ *
+ * Don't call this in a downstream thread unless you don't mind it blowing
+ * away other changes you might have recently made in an upstream thread.
+ */
+void InstancedNode::
+set_instances(PT(InstanceList) instances) {
+  Thread *current_thread = Thread::get_current_thread();
+  CDWriter cdata(_cycler, true);
+  cdata->_instances = std::move(instances);
+  mark_bounds_stale(current_thread->get_pipeline_stage(), current_thread);
+  mark_bam_modified();
 }
 
 /**
@@ -169,12 +199,59 @@ bool InstancedNode::
 cull_callback(CullTraverser *trav, CullTraverserData &data) {
   Thread *current_thread = trav->get_current_thread();
 
+  CPT(InstanceList) instances = get_instances(current_thread);
+
+  if (data._view_frustum != nullptr || !data._cull_planes->is_empty()) {
+    // Culling is on, so we need to figure out which instances are visible.
+    Children children = data.node_reader()->get_children();
+    data.node_reader()->release();
+
+    // Keep track of which instances should be culled away.
+    BitArray culled_instances;
+    culled_instances.set_range(0, instances->size());
+
+    for (size_t ii = 0; ii < instances->size(); ++ii) {
+      CullTraverserData instance_data(data);
+      instance_data.apply_transform((*instances)[ii].get_transform());
+
+      for (size_t ci = 0; ci < children.size(); ++ci) {
+        CullTraverserData child_data(instance_data, children.get_child(ci));
+        if (child_data.is_in_view(trav->get_camera_mask())) {
+          // Yep, the instance is in view.
+          culled_instances.clear_bit(ii);
+          break;
+        }
+      }
+    }
+
+    instances = instances->without(culled_instances);
+  } else {
+    data.node_reader()->release();
+  }
+
+  if (instances->empty()) {
+    // There are no instances, or they are all culled away.
+    return false;
+  }
+
+  if (data._net_transform->is_identity()) {
+    // There is no net transform above this node, and we are not doing any
+    // culling, so we can just use the instance list as-is.
+    data._instances = instances;
+  } else {
+    InstanceList *instances = new InstanceList;
+    for (InstanceList::Instance &instance : *instances) {
+      instance.set_transform(data._net_transform->compose(instance.get_transform()));
+    }
+    data._instances = instances;
+  }
+
   // Disable culling from this point on, for now.
   data._view_frustum = nullptr;
   data._cull_planes = CullPlanes::make_empty();
 
-  CPT(InstanceList) instances = get_instances(current_thread);
-
+  // This is temporary for now, until we actually have the hardware instancing
+  // implemented.
   for (const InstanceList::Instance &instance : *instances) {
     CullTraverserData instance_data(data);
     instance_data.apply_transform(instance.get_transform());
@@ -194,17 +271,124 @@ output(std::ostream &out) const {
 }
 
 /**
- * Returns a newly-allocated BoundingVolume that represents the internal
- * contents of the node.  Should be overridden by PandaNode classes that
- * contain something internally.
+ * Returns a BoundingVolume that represents the external contents of the node.
+ * This should encompass the internal bounds, but also the bounding volumes of
+ * of all this node's children, which are passed in.
  */
 void InstancedNode::
-compute_internal_bounds(CPT(BoundingVolume) &internal_bounds,
-                        int &internal_vertices,
-                        int pipeline_stage,
-                        Thread *current_thread) const {
-  //TODO: generate a better bounding volume.
-  internal_bounds = new OmniBoundingVolume;
+compute_external_bounds(CPT(BoundingVolume) &external_bounds,
+                        BoundingVolume::BoundsType btype,
+                        const BoundingVolume **volumes, size_t num_volumes,
+                        int pipeline_stage, Thread *current_thread) const {
+
+  CPT(InstanceList) instances = get_instances(current_thread);
+
+  PT(GeometricBoundingVolume) gbv;
+  if (btype == BoundingVolume::BT_sphere) {
+    gbv = new BoundingSphere;
+  } else {
+    gbv = new BoundingBox;
+  }
+
+  if (num_volumes == 0 || instances->empty()) {
+    external_bounds = gbv;
+    return;
+  }
+
+  // Compute a sphere at the origin, encompassing the children.  This may not
+  // be the most optimal shape, but it allows us to easily estimate a bounding
+  // volume without having to take each instance transform into account.
+  PN_stdfloat max_radius = 0;
+  LVector3 max_abs_box(0);
+
+  for (size_t i = 0; i < num_volumes; ++i) {
+    const BoundingVolume *child_volume = volumes[i];
+    if (child_volume->is_empty()) {
+      continue;
+    }
+    if (child_volume->is_infinite()) {
+      gbv->set_infinite();
+      break;
+    }
+    if (const BoundingSphere *child_sphere = child_volume->as_bounding_sphere()) {
+      max_radius = child_sphere->get_center().length() + child_sphere->get_radius();
+    }
+    else if (const FiniteBoundingVolume *child_finite = child_volume->as_finite_bounding_volume()) {
+      LPoint3 min1 = child_finite->get_min();
+      LPoint3 max1 = child_finite->get_max();
+      max_abs_box.set(
+        std::max(max_abs_box[0], std::max(std::fabs(min1[0]), std::fabs(max1[0]))),
+        std::max(max_abs_box[1], std::max(std::fabs(min1[1]), std::fabs(max1[1]))),
+        std::max(max_abs_box[2], std::max(std::fabs(min1[2]), std::fabs(max1[2]))));
+    }
+    else {
+      gbv->set_infinite();
+      break;
+    }
+  }
+
+  max_radius = std::max(max_radius, max_abs_box.length());
+  if (max_radius == 0 || gbv->is_infinite()) {
+    external_bounds = gbv;
+    return;
+  }
+
+  // Now that we have a sphere encompassing the children, we will make a box
+  // surrounding all the instances, extended by the computed radius.
+  LPoint3 min_point = (*instances)[0].get_pos();
+  LPoint3 max_point(min_point);
+
+  for (const InstanceList::Instance &instance : *instances) {
+    // To make the math easier and not have to take rotations into account, we
+    // take the highest scale component and multiply it by the radius of the
+    // bounding sphere on the origin we just calculated.
+    LVecBase3 scale = instance.get_scale();
+    PN_stdfloat max_scale = std::max(std::fabs(scale[0]), std::max(std::fabs(scale[1]), std::fabs(scale[2])));
+    PN_stdfloat inst_radius = max_scale * max_radius;
+    LVector3 extends_by(inst_radius);
+    LPoint3 pos = instance.get_pos();
+    min_point = min_point.fmin(pos - extends_by);
+    max_point = max_point.fmax(pos + extends_by);
+  }
+
+  if (min_point == max_point) {
+    external_bounds = gbv;
+    return;
+  }
+
+  // If we really need to make a sphere, we use the center of the bounding box
+  // as our sphere center, and iterate again to find the furthest instance.
+  if (btype == BoundingVolume::BT_sphere) {
+    LPoint3 center = (min_point + max_point) * 0.5;
+
+    PN_stdfloat max_distance = 0;
+    for (const InstanceList::Instance &instance : *instances) {
+      LVecBase3 scale = instance.get_scale();
+      PN_stdfloat max_scale = std::max(std::fabs(scale[0]), std::max(std::fabs(scale[1]), std::fabs(scale[2])));
+      PN_stdfloat inst_radius = max_scale * max_radius;
+      PN_stdfloat distance = (instance.get_pos() - center).length() + inst_radius;
+      max_distance = std::max(max_distance, distance);
+    }
+
+    if (max_distance == 0) {
+      external_bounds = gbv;
+      return;
+    }
+    ((BoundingSphere *)gbv.p())->set_center(center);
+    ((BoundingSphere *)gbv.p())->set_radius(max_distance);
+  } else {
+    //((BoundingBox *)gbv.p())->set_min_max(min_point, max_point);
+    gbv = new BoundingBox(min_point, max_point);
+  }
+
+  // If we have a transform, apply it to the bounding volume we just
+  // computed.
+  CPT(TransformState) transform = get_transform(current_thread);
+  if (!transform->is_identity()) {
+    gbv->xform(transform->get_mat());
+  }
+
+  external_bounds = gbv;
 }
 
 /**

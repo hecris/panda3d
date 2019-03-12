@@ -47,8 +47,8 @@ public:
 
   INLINE size_t get_num_instances() const;
   INLINE CPT(InstanceList) get_instances(Thread *current_thread = Thread::get_current_thread()) const;
-  INLINE PT(InstanceList) modify_instances();
-  INLINE void set_instances(PT(InstanceList) instances);
+  PT(InstanceList) modify_instances();
+  void set_instances(PT(InstanceList) instances);
 
 PUBLISHED:
   MAKE_PROPERTY(instances, modify_instances, set_instances);
@@ -70,8 +70,10 @@ public:
   virtual void output(std::ostream &out) const override;
 
 protected:
-  virtual void compute_internal_bounds(CPT(BoundingVolume) &internal_bounds,
-                                       int &internal_vertices,
+  virtual void compute_external_bounds(CPT(BoundingVolume) &external_bounds,
+                                       BoundingVolume::BoundsType btype,
+                                       const BoundingVolume **volumes,
+                                       size_t num_volumes,
                                        int pipeline_stage,
                                        Thread *current_thread) const override;
 

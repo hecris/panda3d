@@ -32,30 +32,6 @@ get_instances(Thread *current_thread) const {
 }
 
 /**
- * Returns the list of instances.
- *
- * Don't call this in a downstream thread unless you don't mind it blowing
- * away other changes you might have recently made in an upstream thread.
- */
-INLINE PT(InstanceList) InstancedNode::
-modify_instances() {
-  CDWriter cdata(_cycler, true);
-  return cdata->_instances.get_write_pointer();
-}
-
-/**
- * Entirely replaces the list of instances with the given list.
- *
- * Don't call this in a downstream thread unless you don't mind it blowing
- * away other changes you might have recently made in an upstream thread.
- */
-INLINE void InstancedNode::
-set_instances(PT(InstanceList) instances) {
-  CDWriter cdata(_cycler, true);
-  cdata->_instances = std::move(instances);
-}
-
-/**
  *
  */
 INLINE InstancedNode::CData::
