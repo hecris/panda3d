@@ -3,22 +3,42 @@
 
 #include "pandabase.h"
 #include "collisionSolid.h"
+#include "pnmImage.h"
 
 class EXPCL_PANDA_COLLIDE CollisionHeightfield : public CollisionSolid {
+private:
+  struct Rect {
+    LVector2 min;
+    LVector2 max;
+  };
+
+  struct QuadTreeNode {
+    Rect area;
+    double height_min;
+    double height_max;
+  };
+
+  void setup_quadtree(int subdivisions);
+
+
 PUBLISHED:
-  // todo: this should be inline
   INLINE CollisionHeightfield();
+  CollisionHeightfield(PNMImage &heightfield);
   virtual LPoint3 get_collision_origin() const;
 
+private:
+  PNMImage _heightfield;
+  QuadTreeNode *_nodes;
+
 public:
-  // todo: this should be inline
+  INLINE PNMImage &heightfield();
+
   INLINE CollisionHeightfield(const CollisionHeightfield &copy);
   virtual CollisionSolid *make_copy();
 
   virtual PStatCollector &get_volume_pcollector();
   virtual PStatCollector &get_test_pcollector();
 
-  // todo: this should be inline
   INLINE static void flush_level();
 
 protected:

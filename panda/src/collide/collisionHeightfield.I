@@ -11,3 +11,8 @@ flush_level() {
   _volume_pcollector.flush_level();
   _test_pcollector.flush_level();
 }
+
+INLINE PNMImage &CollisionHeightfield::
+heightfield() {
+  return _heightfield;
+}
