@@ -32,15 +32,15 @@ PStatCollector CollisionHeightfield::_test_pcollector(
       "Collision Tests:CollisionHeightfield");
 TypeHandle CollisionHeightfield::_type_handle;
 
-// todo: inline functions
-CollisionHeightfield::
-CollisionHeightfield() {
+PT(CollisionEntry) CollisionHeightfield::
+test_intersection_from_line(const CollisionEntry &entry) const {
+  PT(CollisionEntry) new_entry = new CollisionEntry(entry);
+  return new_entry;
 }
 
-CollisionHeightfield::
-CollisionHeightfield(const CollisionHeightfield &copy) {
-}
-
+/*
+ *
+ */
 CollisionSolid *CollisionHeightfield::
 make_copy() {
     return new CollisionHeightfield(*this);
@@ -48,16 +48,8 @@ make_copy() {
 
 LPoint3 CollisionHeightfield::
 get_collision_origin() const {
-  LPoint3 p(0, 0, 0);
-  return p;
+  return LPoint3(0, 0, 0);
 }
-
-void CollisionHeightfield::
-flush_level() {
-  _volume_pcollector.flush_level();
-  _test_pcollector.flush_level();
-}
-// todo: end inline functions
 
 PT(BoundingVolume) CollisionHeightfield::
 compute_internal_bounds() const {
@@ -72,12 +64,6 @@ get_volume_pcollector() {
 PStatCollector &CollisionHeightfield::
 get_test_pcollector() {
   return _test_pcollector;
-}
-
-PT(CollisionEntry) CollisionHeightfield::
-test_intersection_from_line(const CollisionEntry &entry) const {
-  PT(CollisionEntry) new_entry = new CollisionEntry(entry);
-  return new_entry;
 }
 
 TypedWritable *CollisionHeightfield::

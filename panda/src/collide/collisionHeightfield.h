@@ -7,19 +7,19 @@
 class EXPCL_PANDA_COLLIDE CollisionHeightfield : public CollisionSolid {
 PUBLISHED:
   // todo: this should be inline
-  CollisionHeightfield();
+  INLINE CollisionHeightfield();
   virtual LPoint3 get_collision_origin() const;
 
 public:
   // todo: this should be inline
-  CollisionHeightfield(const CollisionHeightfield &copy);
+  INLINE CollisionHeightfield(const CollisionHeightfield &copy);
   virtual CollisionSolid *make_copy();
 
   virtual PStatCollector &get_volume_pcollector();
   virtual PStatCollector &get_test_pcollector();
 
   // todo: this should be inline
-  static void flush_level();
+  INLINE static void flush_level();
 
 protected:
   virtual PT(BoundingVolume) compute_internal_bounds() const;
@@ -56,4 +56,7 @@ public:
 private:
   static TypeHandle _type_handle;
 };
+
+#include "collisionHeightfield.I"
+
 #endif
