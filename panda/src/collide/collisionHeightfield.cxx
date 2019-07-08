@@ -26,9 +26,12 @@
 #include "geom.h"
 #include "geomLinestrips.h"
 #include "geomVertexWriter.h"
+#include <queue>
 
 using std::min;
 using std::max;
+using std::queue;
+using std::vector;
 
 PStatCollector CollisionHeightfield::_volume_pcollector(
       "Collision Volumes:CollisionHeightfield");
@@ -39,61 +42,57 @@ TypeHandle CollisionHeightfield::_type_handle;
 CollisionHeightfield::
 CollisionHeightfield(PNMImage &heightfield) {
   _heightfield = heightfield;
-  /* setup_quadtree(); */
+  setup_quadtree(1);
 }
 
 void CollisionHeightfield::
 setup_quadtree(int subdivisions) {
   int nodes_count = 0;
-  for (int i = 0; i < subdivisions; i++) {
+  for (int i = 0; i <= subdivisions; i++) {
     nodes_count += pow(4, i);
   }
   QuadTreeNode nodes[nodes_count];
-  QuadTreeNode node = nodes[0];
-  node.area.min = {0, 0};
-  node.area.max = {(float)_heightfield.get_read_x_size(),
-                   (float)_heightfield.get_read_y_size()};
+  nodes[0].area.min = {0, 0};
+  nodes[0].area.max = {(float)_heightfield.get_read_x_size() - 1,
+                       (float)_heightfield.get_read_y_size() - 1};
   QuadTreeNode parent;
   for (int i = 1; i < nodes_count; i += 4) {
     parent = nodes[(i-1) / 4];
     // NW Quadrant
-    node = nodes[i];
-    node.area.min = {parent.area.max[0] / 2,
-                     parent.area.max[1] / 2};
-    node.area.max = parent.area.max;
+    nodes[i].area.min = {parent.area.max[0] / 2,
+                         parent.area.max[1] / 2};
+    nodes[i].area.max = parent.area.max;
     // NE Quadrant
-    node = nodes[i + 1];
-    node.area.min = {parent.area.min[0],
-                     parent.area.max[1] / 2};
-    node.area.max = {parent.area.max[0] / 2,
-                     parent.area.max[1]};
+    nodes[i + 1].area.min = {parent.area.min[0],
+                             parent.area.max[1] / 2};
+    nodes[i + 1].area.max = {parent.area.max[0] / 2,
+                             parent.area.max[1]};
     // SW Quadrant
-    node = nodes[i + 2];
-    node.area.min = {parent.area.max[0] / 2,
-                     parent.area.min[1]};
-    node.area.max = {parent.area.max[0],
-                     parent.area.max[1] / 2};
+    nodes[i + 2].area.min = {parent.area.max[0] / 2,
+                             parent.area.min[1]};
+    nodes[i + 2].area.max = {parent.area.max[0],
+                             parent.area.max[1] / 2};
     // SE Quadrant
-    node = nodes[i + 3];
-    node.area.min = parent.area.min;
-    node.area.max = {parent.area.max[0] / 2,
-                     parent.area.max[1] / 2};
+    nodes[i + 3].area.min = parent.area.min;
+    nodes[i + 3].area.max = {parent.area.max[0] / 2,
+                             parent.area.max[1] / 2};
   }
 
   int leaf_first_index = 0;
-  for (int i = 1; i < subdivisions - 1; i++) {
+  for (int i = 1; i <= subdivisions - 1; i++) {
     leaf_first_index += pow(4, i);
   }
 
+  QuadTreeNode node;
   QuadTreeNode child;
   for (int i = nodes_count - 1; i >= 0; i--) {
     node = nodes[i];
-    double height_min = DBL_MAX;
-    double height_max = DBL_MIN;
+    float height_min = INT_MAX;
+    float height_max = INT_MIN;
     if (i >= leaf_first_index) {
       for (int x = node.area.min[0]; x < node.area.max[0]; x++) {
         for (int y = node.area.min[1]; y < node.area.max[1]; y++) {
-          double value = _heightfield.get_gray(x, y);
+          float value = _heightfield.get_gray(x, y);
           height_min = std::min(value, height_min);
           height_max = std::max(value, height_max);
         }
@@ -105,16 +104,46 @@ setup_quadtree(int subdivisions) {
         height_max = std::max(child.height_max, height_max);
       }
     }
-    node.height_min = height_min;
-    node.height_max = height_max;
+    nodes[i].height_min = height_min;
+    nodes[i].height_max = height_max;
   }
   _nodes = nodes;
 }
 
 PT(CollisionEntry) CollisionHeightfield::
 test_intersection_from_ray(const CollisionEntry &entry) const {
-  PT(CollisionEntry) new_entry = new CollisionEntry(entry);
-  return new_entry;
+  const CollisionRay *ray;
+  DCAST_INTO_R(ray, entry.get_from(), nullptr);
+  const LMatrix4 &wrt_mat = entry.get_wrt_mat();
+
+  LPoint3 from_origin = ray->get_origin() * wrt_mat;
+  LPoint3 from_direction = ray->get_direction() * wrt_mat;
+
+  double t1, t2;
+  queue<QuadTreeNode> q;
+  /* vector<QuadTreeNode> intersected_nodes; */
+  LPoint3 box_min, box_max;
+  QuadTreeNode node = _nodes[0];
+  q.push(node);
+  while (!q.empty()) {
+    node = q.front();
+    q.pop();
+    box_min = {node.area.min[0],
+               node.area.min[1], node.height_min};
+    box_max = {node.area.max[0],
+               node.area.max[1], node.height_max};
+    /* collide_cat.error() << box_min << '\n'; */
+    /* collide_cat.error() << box_max << '\n'; */
+    if (box_intersects_line(t1, t2, box_min, box_max,
+                            from_origin, from_direction)) {
+      if (t1 >= 0.0 || t2 >= 0.0) {
+        PT(CollisionEntry) new_entry = new CollisionEntry(entry);
+        return new_entry;
+      }
+    }
+    break;
+  }
+  return nullptr;
 }
 
 bool CollisionHeightfield::
@@ -168,7 +197,13 @@ get_collision_origin() const {
 
 PT(BoundingVolume) CollisionHeightfield::
 compute_internal_bounds() const {
-  return new BoundingBox(LPoint3(0, 0, 0), LPoint3(1, 1, 1));
+  /* Todo: this seems to be incorrect */
+  QuadTreeNode node = _nodes[0];
+  LPoint3 box_min = {node.area.min[0], node.area.min[1],
+                     node.height_min};
+  LPoint3 box_max = {node.area.max[0], node.area.max[1],
+                     node.height_max};
+  return new BoundingBox(box_min, box_max);
 }
 
 PStatCollector &CollisionHeightfield::

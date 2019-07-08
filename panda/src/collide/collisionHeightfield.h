@@ -14,8 +14,8 @@ private:
 
   struct QuadTreeNode {
     Rect area;
-    double height_min;
-    double height_max;
+    float height_min;
+    float height_max;
   };
 
   void setup_quadtree(int subdivisions);
