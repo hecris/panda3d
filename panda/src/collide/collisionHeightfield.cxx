@@ -7,8 +7,8 @@
  * with this source code in a file named "LICENSE."
  *
  * @file CollisionHeightfield.cxx
- * @author drose
- * @date 2000-06-22
+ * @author hecris
+ * @date 2019-07-01
  */
 
 #include "collisionHeightfield.h"
@@ -112,10 +112,46 @@ setup_quadtree(int subdivisions) {
 }
 
 PT(CollisionEntry) CollisionHeightfield::
-test_intersection_from_line(const CollisionEntry &entry) const {
+test_intersection_from_ray(const CollisionEntry &entry) const {
   PT(CollisionEntry) new_entry = new CollisionEntry(entry);
   return new_entry;
 }
+
+bool CollisionHeightfield::
+box_intersects_line(double &t1, double &t2,
+                    const LPoint3 &box_min, const LPoint3 &box_max,
+                    const LPoint3 &from, const LVector3 &delta) const {
+
+  double tmin = -DBL_MAX;
+  double tmax = DBL_MAX;
+
+  for (int i = 0; i < 3; ++i) {
+    PN_stdfloat d = delta[i];
+    if (!IS_NEARLY_ZERO(d)) {
+      double tmin2 = (box_min[i] - from[i]) / d;
+      double tmax2 = (box_max[i] - from[i]) / d;
+      if (tmin2 > tmax2) {
+        std::swap(tmin2, tmax2);
+      }
+      tmin = std::max(tmin, tmin2);
+      tmax = std::max(tmax, tmax2);
+
+      if (tmin > tmax) {
+        return false;
+      }
+
+    } else if (from[i] < box_min[i] || from[i] > box_max[i]) {
+      // The line is parallel
+      return false;
+    }
+  }
+
+  t1 = tmin;
+  t2 = tmax;
+  return true;
+}
+
+
 
 /*
  * Generic member functions

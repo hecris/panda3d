@@ -45,8 +45,12 @@ protected:
   virtual PT(BoundingVolume) compute_internal_bounds() const;
 
 protected:
+  bool box_intersects_line(double &t1, double &t2,
+                           const LPoint3 &box_min, const LPoint3 &box_max,
+                           const LPoint3 &from, const LVector3 &delta) const;
+
   virtual PT(CollisionEntry)
-  test_intersection_from_line(const CollisionEntry &entry) const;
+  test_intersection_from_ray(const CollisionEntry &entry) const;
 
 private:
   static PStatCollector _volume_pcollector;
