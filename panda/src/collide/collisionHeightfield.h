@@ -13,6 +13,7 @@ private:
   };
 
   struct QuadTreeNode {
+    int index;
     Rect area;
     float height_min;
     float height_max;

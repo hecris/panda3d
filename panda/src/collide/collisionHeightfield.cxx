@@ -44,8 +44,8 @@ CollisionHeightfield(PNMImage &heightfield) {
   _heightfield = heightfield;
   setup_quadtree(3);
   /* for (int i = 0; i < _nodes_count; i++) { */
-  /*   if ((i - 1) % 4 == 0) collide_cat.error() << '\n'; */
-  /*   collide_cat.error() << i << ": (" */
+  /*   if ((_nodes[i].index - 1) % 4 == 0) collide_cat.error() << '\n'; */
+  /*   collide_cat.error() << _nodes[i].index << ": (" */
   /*   << _nodes[i].area.min[0] << ',' */
   /*   << _nodes[i].area.min[1] << ") (" */
   /*   << _nodes[i].area.max[0] << ',' */
@@ -70,17 +70,21 @@ setup_quadtree(int subdivisions) {
     // SE Quadrant
     nodes[i].area.min = parent.area.min;
     nodes[i].area.max = parent.area.min + sub_area;
+    nodes[i].index = i;
     // SW Quadrant
     nodes[i + 1].area.min = {parent.area.min[0] + sub_area[0],
                              parent.area.min[1]};
     nodes[i + 1].area.max = nodes[i + 1].area.min + sub_area;
+    nodes[i + 1].index = i + 1;
     // NE Quadrant
     nodes[i + 2].area.min = {parent.area.min[0],
                              parent.area.min[1] + sub_area[1]};
     nodes[i + 2].area.max = nodes[i + 2].area.min + sub_area;
+    nodes[i + 2].index = i + 2;
     // NW Quadrant
     nodes[i + 3].area.min = parent.area.min + sub_area;
     nodes[i + 3].area.max = parent.area.max;
+    nodes[i + 3].index = i + 3;
   }
 
   int leaf_first_index = 0;
