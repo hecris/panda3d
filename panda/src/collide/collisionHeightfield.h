@@ -34,6 +34,7 @@ private:
   // Todo: PT(QuadTreeNode) _nodes;
   QuadTreeNode *_nodes;
   int _nodes_count;
+  int _leaf_first_index;
 
 public:
   INLINE PNMImage &heightfield();
