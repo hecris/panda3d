@@ -15,8 +15,14 @@ private:
   struct QuadTreeNode {
     int index;
     Rect area;
-    float height_min;
-    float height_max;
+    PN_stdfloat height_min;
+    PN_stdfloat height_max;
+  };
+
+  struct QuadTreeIntersection {
+    int node_index;
+    double tmin;
+    double tmax;
   };
 
   void setup_quadtree(int subdivisions);
@@ -26,7 +32,7 @@ PUBLISHED:
   INLINE CollisionHeightfield();
   ~CollisionHeightfield() {
     delete[] _nodes;
-  };
+  }
   CollisionHeightfield(PNMImage &heightfield);
   virtual LPoint3 get_collision_origin() const;
 
@@ -52,7 +58,7 @@ protected:
   virtual PT(BoundingVolume) compute_internal_bounds() const;
 
 protected:
-  bool box_intersects_line(double &t1, double &t2,
+  bool line_intersects_box(double &t1, double &t2,
                            const LPoint3 &box_min, const LPoint3 &box_max,
                            const LPoint3 &from, const LVector3 &delta) const;
 

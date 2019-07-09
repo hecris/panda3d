@@ -1,3 +1,4 @@
+#define MSG(s) collide_cat.error() << s << '\n';
 /**
  * PANDA 3D SOFTWARE
  * Copyright (c) Carnegie Mellon University.  All rights reserved.
@@ -42,7 +43,7 @@ TypeHandle CollisionHeightfield::_type_handle;
 CollisionHeightfield::
 CollisionHeightfield(PNMImage &heightfield) {
   _heightfield = heightfield;
-  setup_quadtree(3);
+  setup_quadtree(1);
   /* for (int i = 0; i < _nodes_count; i++) { */
   /*   if ((_nodes[i].index - 1) % 4 == 0) collide_cat.error() << '\n'; */
   /*   collide_cat.error() << _nodes[i].index << ": (" */
@@ -63,6 +64,7 @@ setup_quadtree(int subdivisions) {
   nodes[0].area.min = {0, 0};
   nodes[0].area.max = {(float)_heightfield.get_read_x_size(),
                        (float)_heightfield.get_read_y_size()};
+  nodes[0].index = 0;
   QuadTreeNode parent;
   for (int i = 1; i < nodes_count; i += 4) {
     parent = nodes[(i-1) / 4];
@@ -87,7 +89,7 @@ setup_quadtree(int subdivisions) {
     nodes[i + 3].index = i + 3;
   }
 
-  int leaf_first_index = 0;
+  int leaf_first_index = 1;
   for (int i = 1; i <= subdivisions - 1; i++) {
     leaf_first_index += pow(4, i);
   }
@@ -96,12 +98,12 @@ setup_quadtree(int subdivisions) {
   QuadTreeNode child;
   for (int i = nodes_count - 1; i >= 0; i--) {
     node = nodes[i];
-    float height_min = INT_MAX;
-    float height_max = INT_MIN;
+    PN_stdfloat height_min = INT_MAX;
+    PN_stdfloat height_max = INT_MIN;
     if (i >= leaf_first_index) {
       for (int x = node.area.min[0]; x < node.area.max[0]; x++) {
         for (int y = node.area.min[1]; y < node.area.max[1]; y++) {
-          float value = _heightfield.get_gray_val(x, y);
+          PN_stdfloat value = _heightfield.get_gray_val(x, y);
           height_min = std::min(value, height_min);
           height_max = std::max(value, height_max);
         }
@@ -132,7 +134,7 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
 
   double t1, t2;
   queue<QuadTreeNode> q;
-  /* vector<QuadTreeNode> intersected_nodes; */
+  vector<QuadTreeIntersection> intersections;
   LPoint3 box_min, box_max;
   QuadTreeNode node = _nodes[0];
   q.push(node);
@@ -143,25 +145,39 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
                node.area.min[1], node.height_min};
     box_max = {node.area.max[0],
                node.area.max[1], node.height_max};
-    /* collide_cat.error() << box_min << '\n'; */
-    /* collide_cat.error() << box_max << '\n'; */
-    if (!box_intersects_line(t1, t2, box_min, box_max, from_origin,
+    if (!line_intersects_box(t1, t2, box_min, box_max, from_origin,
                              from_direction) || (t1 < 0.0 && t2 < 0.0)) {
       continue;
     }
-    PT(CollisionEntry) new_entry = new CollisionEntry(entry);
+
     if (t1 < 0.0) {
       t1 = t2;
     }
-    collide_cat.error() << t1 << '\n';
-    collide_cat.error() << from_origin + from_direction * t1 << '\n';
-    return new_entry;
+
+    if (node.index >= _leaf_first_index) {
+      // is a leaf node
+      QuadTreeIntersection intersection = {node.index, t1, t2};
+      intersections.push_back(intersection);
+    } else {
+      int child_first_index = 4 * node.index + 1;
+      q.push(_nodes[child_first_index]);
+      q.push(_nodes[child_first_index + 1]);
+      q.push(_nodes[child_first_index + 2]);
+      q.push(_nodes[child_first_index + 3]);
+    }
   }
+
+  for (int i = 0; i < intersections.size(); i++) {
+    MSG(intersections[i].node_index);
+    double t = std::min(intersections[i].tmin, intersections[i].tmax);
+    MSG(from_origin + from_direction * t);
+  }
+
   return nullptr;
 }
 
 bool CollisionHeightfield::
-box_intersects_line(double &t1, double &t2,
+line_intersects_box(double &t1, double &t2,
                     const LPoint3 &box_min, const LPoint3 &box_max,
                     const LPoint3 &from, const LVector3 &delta) const {
 
