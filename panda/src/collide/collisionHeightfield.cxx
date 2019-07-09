@@ -51,7 +51,7 @@ setup_quadtree(int subdivisions) {
   for (int i = 0; i <= subdivisions; i++) {
     nodes_count += pow(4, i);
   }
-  QuadTreeNode nodes[nodes_count];
+  QuadTreeNode *nodes = new QuadTreeNode[nodes_count];
   nodes[0].area.min = {0, 0};
   nodes[0].area.max = {(float)_heightfield.get_read_x_size() - 1,
                        (float)_heightfield.get_read_y_size() - 1};
@@ -90,9 +90,9 @@ setup_quadtree(int subdivisions) {
     float height_min = INT_MAX;
     float height_max = INT_MIN;
     if (i >= leaf_first_index) {
-      for (int x = node.area.min[0]; x < node.area.max[0]; x++) {
-        for (int y = node.area.min[1]; y < node.area.max[1]; y++) {
-          float value = _heightfield.get_gray(x, y);
+      for (int x = node.area.min[0]; x <= node.area.max[0]; x++) {
+        for (int y = node.area.min[1]; y <= node.area.max[1]; y++) {
+          float value = _heightfield.get_gray_val(x, y);
           height_min = std::min(value, height_min);
           height_max = std::max(value, height_max);
         }
@@ -108,6 +108,7 @@ setup_quadtree(int subdivisions) {
     nodes[i].height_max = height_max;
   }
   _nodes = nodes;
+  _nodes_count = nodes_count;
 }
 
 PT(CollisionEntry) CollisionHeightfield::
@@ -134,14 +135,17 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
                node.area.max[1], node.height_max};
     /* collide_cat.error() << box_min << '\n'; */
     /* collide_cat.error() << box_max << '\n'; */
-    if (box_intersects_line(t1, t2, box_min, box_max,
-                            from_origin, from_direction)) {
-      if (t1 >= 0.0 || t2 >= 0.0) {
-        PT(CollisionEntry) new_entry = new CollisionEntry(entry);
-        return new_entry;
-      }
+    if (!box_intersects_line(t1, t2, box_min, box_max, from_origin,
+                             from_direction) || (t1 < 0.0 && t2 < 0.0)) {
+      continue;
     }
-    break;
+    PT(CollisionEntry) new_entry = new CollisionEntry(entry);
+    if (t1 < 0.0) {
+      t1 = t2;
+    }
+    collide_cat.error() << t1 << '\n';
+    collide_cat.error() << from_origin + from_direction * t1 << '\n';
+    return new_entry;
   }
   return nullptr;
 }
@@ -163,7 +167,7 @@ box_intersects_line(double &t1, double &t2,
         std::swap(tmin2, tmax2);
       }
       tmin = std::max(tmin, tmin2);
-      tmax = std::max(tmax, tmax2);
+      tmax = std::min(tmax, tmax2);
 
       if (tmin > tmax) {
         return false;
@@ -197,7 +201,6 @@ get_collision_origin() const {
 
 PT(BoundingVolume) CollisionHeightfield::
 compute_internal_bounds() const {
-  /* Todo: this seems to be incorrect */
   QuadTreeNode node = _nodes[0];
   LPoint3 box_min = {node.area.min[0], node.area.min[1],
                      node.height_min};

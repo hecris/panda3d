@@ -23,12 +23,17 @@ private:
 
 PUBLISHED:
   INLINE CollisionHeightfield();
+  ~CollisionHeightfield() {
+    delete[] _nodes;
+  };
   CollisionHeightfield(PNMImage &heightfield);
   virtual LPoint3 get_collision_origin() const;
 
 private:
   PNMImage _heightfield;
+  // Todo: PT(QuadTreeNode) _nodes;
   QuadTreeNode *_nodes;
+  int _nodes_count;
 
 public:
   INLINE PNMImage &heightfield();
