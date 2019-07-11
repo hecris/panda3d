@@ -43,7 +43,7 @@ TypeHandle CollisionHeightfield::_type_handle;
 CollisionHeightfield::
 CollisionHeightfield(PNMImage &heightfield) {
   _heightfield = heightfield;
-  setup_quadtree(1);
+  setup_quadtree(4);
   /* for (int i = 0; i < _nodes_count; i++) { */
   /*   if ((_nodes[i].index - 1) % 4 == 0) collide_cat.error() << '\n'; */
   /*   collide_cat.error() << _nodes[i].index << ": (" */
@@ -150,12 +150,9 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
       continue;
     }
 
-    if (t1 < 0.0) {
-      t1 = t2;
-    }
-
     if (node.index >= _leaf_first_index) {
       // is a leaf node
+      if (t1 < 0.0) t1 = t2;
       QuadTreeIntersection intersection = {node.index, t1, t2};
       intersections.push_back(intersection);
     } else {
@@ -169,8 +166,10 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
 
   for (int i = 0; i < intersections.size(); i++) {
     MSG(intersections[i].node_index);
-    double t = std::min(intersections[i].tmin, intersections[i].tmax);
-    MSG(from_origin + from_direction * t);
+    MSG(intersections[i].tmin);
+    MSG(intersections[i].tmax);
+    /* double t = std::min(intersections[i].tmin, intersections[i].tmax); */
+    /* MSG(from_origin + from_direction * t); */
   }
 
   return nullptr;
@@ -211,10 +210,46 @@ line_intersects_box(double &t1, double &t2,
 }
 
 
+bool CollisionHeightfield::
+line_intersects_triangle(double &t, const LPoint3 &from,
+                         const LPoint3 &delta,
+                         const Triangle &triangle) const {
+  const PN_stdfloat EPSILON = 1.0e-7;
+  PN_stdfloat a,f,u,v;
+  LVector3 edge1, edge2, h, s, q;
+  edge1 = triangle.p2 - triangle.p1;
+  edge2 = triangle.p3 - triangle.p1;
+  h = delta.cross(edge2);
+  a = dot(edge1, h);
+  if (a > -EPSILON && a < EPSILON) {
+    // line parallel to triangle
+    return false;
+  }
+  f = 1.0 / a;
+  s = from - triangle.p1;
+  u = f * dot(s, h);
+  if (u < 0.0 || u > 1.0) {
+    return false;
+  }
+  q = s.cross(edge1);
+  v = f * dot(delta, q);
+  if (v < 0.0 || u + v > 1.0) {
+    return false;
+  }
+  t = f * dot(edge2, q);
+  if (t > EPSILON) {
+    return true;
+  } else {
+    return false;
+  }
+}
 
 /*
  * Generic member functions
  */
+void CollisionHeightfield::
+fill_viz_geom() {
+}
 CollisionSolid *CollisionHeightfield::
 make_copy() {
   return new CollisionHeightfield(*this);

@@ -7,6 +7,12 @@
 
 class EXPCL_PANDA_COLLIDE CollisionHeightfield : public CollisionSolid {
 private:
+  struct Triangle {
+    LPoint3 p1;
+    LPoint3 p2;
+    LPoint3 p3;
+  };
+
   struct Rect {
     LVector2 min;
     LVector2 max;
@@ -58,12 +64,19 @@ protected:
   virtual PT(BoundingVolume) compute_internal_bounds() const;
 
 protected:
+  // Todo: make sure this works for line, not just ray
+  bool line_intersects_triangle(double &t, const LPoint3 &from,
+                                const LPoint3 &delta,
+                                const Triangle &triangle) const;
+
   bool line_intersects_box(double &t1, double &t2,
                            const LPoint3 &box_min, const LPoint3 &box_max,
                            const LPoint3 &from, const LVector3 &delta) const;
 
   virtual PT(CollisionEntry)
   test_intersection_from_ray(const CollisionEntry &entry) const;
+
+  virtual void fill_viz_geom();
 
 private:
   static PStatCollector _volume_pcollector;
