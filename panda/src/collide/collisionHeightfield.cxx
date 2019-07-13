@@ -164,6 +164,11 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
     }
   }
 
+  if (intersections.size() == 0) {
+    return nullptr;
+  }
+
+  PT(CollisionEntry) new_entry = new CollisionEntry(entry);
   for (int i = 0; i < intersections.size(); i++) {
     MSG(intersections[i].node_index);
     MSG(intersections[i].tmin);
@@ -172,7 +177,7 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
     /* MSG(from_origin + from_direction * t); */
   }
 
-  return nullptr;
+  return new_entry;
 }
 
 bool CollisionHeightfield::
@@ -249,7 +254,45 @@ line_intersects_triangle(double &t, const LPoint3 &from,
  */
 void CollisionHeightfield::
 fill_viz_geom() {
+  // Experimental
+  if (collide_cat.is_debug()) {
+    collide_cat.debug()
+      << "Recomputing viz for " << *this << "\n";
+  }
+
+  PT(GeomVertexData) vdata = new GeomVertexData
+    ("collision", GeomVertexFormat::get_v3(),
+     Geom::UH_static);
+  GeomVertexWriter vertex(vdata, InternalName::get_vertex());
+  int rows = _heightfield.get_read_x_size();
+  int columns = _heightfield.get_read_y_size();
+
+  for (int i = 0; i < rows; i++) {
+    for (int j = 0; j < columns; j++) {
+      vertex.add_data3(i, j, _heightfield.get_gray_val(i, j));
+    }
+  }
+
+  PT(GeomTriangles) tris = new GeomTriangles(Geom::UH_static);
+
+  for (int i = 0; i < rows; i += 2) {
+    for (int j = 0; j < columns; j++) {
+      int index = j + i * columns;
+      if (j % 2 == 0) {
+        tris->add_vertices(index, index + 1, index + columns);
+      } else {
+        tris->add_vertices(index, index + columns, index + columns - 1);
+      }
+    }
+  }
+
+  PT(Geom) geom = new Geom(vdata);
+  geom->add_primitive(tris);
+
+  _viz_geom->add_geom(geom, get_solid_viz_state());
+  _bounds_viz_geom->add_geom(geom, get_solid_bounds_viz_state());
 }
+
 CollisionSolid *CollisionHeightfield::
 make_copy() {
   return new CollisionHeightfield(*this);
