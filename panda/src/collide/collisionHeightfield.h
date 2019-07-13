@@ -29,6 +29,9 @@ private:
     int node_index;
     double tmin;
     double tmax;
+    bool operator < (const QuadTreeIntersection& intersection) const {
+      return tmin < intersection.tmin;
+    }
   };
 
   void setup_quadtree(int subdivisions);
