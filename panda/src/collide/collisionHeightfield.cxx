@@ -28,11 +28,13 @@
 #include "geomLinestrips.h"
 #include "geomVertexWriter.h"
 #include <queue>
+#include <algorithm>
 
 using std::min;
 using std::max;
 using std::queue;
 using std::vector;
+using std::sort;
 
 PStatCollector CollisionHeightfield::_volume_pcollector(
       "Collision Volumes:CollisionHeightfield");
@@ -167,6 +169,7 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
   if (intersections.size() == 0) {
     return nullptr;
   }
+  std::sort(intersections.begin(), intersections.end());
 
   PT(CollisionEntry) new_entry = new CollisionEntry(entry);
   for (int i = 0; i < intersections.size(); i++) {
