@@ -34,7 +34,7 @@ private:
     }
   };
 
-  void setup_quadtree(int subdivisions);
+  void setup_quadtree(int subdivisions, double max_height);
 
 
 PUBLISHED:
@@ -42,7 +42,7 @@ PUBLISHED:
   ~CollisionHeightfield() {
     delete[] _nodes;
   }
-  CollisionHeightfield(PNMImage &heightfield);
+  CollisionHeightfield(PNMImage &heightfield, double max_height);
   virtual LPoint3 get_collision_origin() const;
 
 private:

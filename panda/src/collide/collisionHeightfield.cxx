@@ -43,9 +43,9 @@ PStatCollector CollisionHeightfield::_test_pcollector(
 TypeHandle CollisionHeightfield::_type_handle;
 
 CollisionHeightfield::
-CollisionHeightfield(PNMImage &heightfield) {
+CollisionHeightfield(PNMImage &heightfield, double max_height) {
   _heightfield = heightfield;
-  setup_quadtree(4);
+  setup_quadtree(4, max_height);
   /* for (int i = 0; i < _nodes_count; i++) { */
   /*   if ((_nodes[i].index - 1) % 4 == 0) collide_cat.error() << '\n'; */
   /*   collide_cat.error() << _nodes[i].index << ": (" */
@@ -57,7 +57,7 @@ CollisionHeightfield(PNMImage &heightfield) {
 }
 
 void CollisionHeightfield::
-setup_quadtree(int subdivisions) {
+setup_quadtree(int subdivisions, double max_height) {
   int nodes_count = 0;
   for (int i = 0; i <= subdivisions; i++) {
     nodes_count += pow(4, i);
@@ -105,7 +105,7 @@ setup_quadtree(int subdivisions) {
     if (i >= leaf_first_index) {
       for (int x = node.area.min[0]; x < node.area.max[0]; x++) {
         for (int y = node.area.min[1]; y < node.area.max[1]; y++) {
-          PN_stdfloat value = _heightfield.get_gray_val(x, y);
+          PN_stdfloat value = _heightfield.get_gray(x, y) * max_height;
           height_min = std::min(value, height_min);
           height_max = std::max(value, height_max);
         }
@@ -173,11 +173,8 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
 
   PT(CollisionEntry) new_entry = new CollisionEntry(entry);
   for (int i = 0; i < intersections.size(); i++) {
-    MSG(intersections[i].node_index);
-    MSG(intersections[i].tmin);
-    MSG(intersections[i].tmax);
-    /* double t = std::min(intersections[i].tmin, intersections[i].tmax); */
-    /* MSG(from_origin + from_direction * t); */
+    double t = std::min(intersections[i].tmin, intersections[i].tmax);
+    new_entry->set_surface_point(from_origin + from_direction * t);
   }
 
   return new_entry;
@@ -257,43 +254,6 @@ line_intersects_triangle(double &t, const LPoint3 &from,
  */
 void CollisionHeightfield::
 fill_viz_geom() {
-  // Experimental
-  if (collide_cat.is_debug()) {
-    collide_cat.debug()
-      << "Recomputing viz for " << *this << "\n";
-  }
-
-  PT(GeomVertexData) vdata = new GeomVertexData
-    ("collision", GeomVertexFormat::get_v3(),
-     Geom::UH_static);
-  GeomVertexWriter vertex(vdata, InternalName::get_vertex());
-  int rows = _heightfield.get_read_x_size();
-  int columns = _heightfield.get_read_y_size();
-
-  for (int i = 0; i < rows; i++) {
-    for (int j = 0; j < columns; j++) {
-      vertex.add_data3(i, j, _heightfield.get_gray_val(i, j));
-    }
-  }
-
-  PT(GeomTriangles) tris = new GeomTriangles(Geom::UH_static);
-
-  for (int i = 0; i < rows; i += 2) {
-    for (int j = 0; j < columns; j++) {
-      int index = j + i * columns;
-      if (j % 2 == 0) {
-        tris->add_vertices(index, index + 1, index + columns);
-      } else {
-        tris->add_vertices(index, index + columns, index + columns - 1);
-      }
-    }
-  }
-
-  PT(Geom) geom = new Geom(vdata);
-  geom->add_primitive(tris);
-
-  _viz_geom->add_geom(geom, get_solid_viz_state());
-  _bounds_viz_geom->add_geom(geom, get_solid_bounds_viz_state());
 }
 
 CollisionSolid *CollisionHeightfield::
