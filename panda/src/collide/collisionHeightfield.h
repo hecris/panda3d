@@ -34,8 +34,10 @@ private:
     }
   };
 
-  void setup_quadtree(int subdivisions, double max_height);
+  double _max_height;
 
+  void setup_quadtree(int subdivisions);
+  std::vector<Triangle> get_triangles(int x, int y) const;
 
 PUBLISHED:
   INLINE CollisionHeightfield();

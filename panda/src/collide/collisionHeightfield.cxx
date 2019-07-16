@@ -45,84 +45,30 @@ TypeHandle CollisionHeightfield::_type_handle;
 CollisionHeightfield::
 CollisionHeightfield(PNMImage &heightfield, double max_height) {
   _heightfield = heightfield;
-  setup_quadtree(4, max_height);
-  /* for (int i = 0; i < _nodes_count; i++) { */
-  /*   if ((_nodes[i].index - 1) % 4 == 0) collide_cat.error() << '\n'; */
-  /*   collide_cat.error() << _nodes[i].index << ": (" */
-  /*   << _nodes[i].area.min[0] << ',' */
-  /*   << _nodes[i].area.min[1] << ") (" */
-  /*   << _nodes[i].area.max[0] << ',' */
-  /*   << _nodes[i].area.max[1] << ")\n"; */
-  /* } */
+  _max_height = max_height;
+  setup_quadtree(4);
 }
 
-void CollisionHeightfield::
-setup_quadtree(int subdivisions, double max_height) {
-  int nodes_count = 0;
-  for (int i = 0; i <= subdivisions; i++) {
-    nodes_count += pow(4, i);
-  }
-  QuadTreeNode *nodes = new QuadTreeNode[nodes_count];
-  nodes[0].area.min = {0, 0};
-  nodes[0].area.max = {(float)_heightfield.get_read_x_size(),
-                       (float)_heightfield.get_read_y_size()};
-  nodes[0].index = 0;
-  QuadTreeNode parent;
-  for (int i = 1; i < nodes_count; i += 4) {
-    parent = nodes[(i-1) / 4];
-    LVector2 sub_area = (parent.area.max - parent.area.min) / 2;
-    // SE Quadrant
-    nodes[i].area.min = parent.area.min;
-    nodes[i].area.max = parent.area.min + sub_area;
-    nodes[i].index = i;
-    // SW Quadrant
-    nodes[i + 1].area.min = {parent.area.min[0] + sub_area[0],
-                             parent.area.min[1]};
-    nodes[i + 1].area.max = nodes[i + 1].area.min + sub_area;
-    nodes[i + 1].index = i + 1;
-    // NE Quadrant
-    nodes[i + 2].area.min = {parent.area.min[0],
-                             parent.area.min[1] + sub_area[1]};
-    nodes[i + 2].area.max = nodes[i + 2].area.min + sub_area;
-    nodes[i + 2].index = i + 2;
-    // NW Quadrant
-    nodes[i + 3].area.min = parent.area.min + sub_area;
-    nodes[i + 3].area.max = parent.area.max;
-    nodes[i + 3].index = i + 3;
+vector<CollisionHeightfield::Triangle> CollisionHeightfield::
+get_triangles(int x, int y) const {
+  vector<Triangle> triangles;
+  int rows = _heightfield.get_read_x_size();
+  int cols = _heightfield.get_read_y_size();
+  Triangle t;
+  int y2 = cols - y - 1;
+  t.p1 = LPoint3(x, y, _heightfield.get_gray(x, y2) * _max_height);
+  if (x - 1 >= 0 && y - 1 >= 0) {
+    /* t.p2 = LPoint3(x, cols-1-y-1, _heightfield.get_gray(x, y - 1) * _max_height); */
+    /* t.p3 = LPoint3(x -1, cols-1-y, _heightfield.get_gray(x-1, y) * _max_height); */
+    t.p2 = LPoint3(x, y - 1, _heightfield.get_gray(x, y2 - 1) * _max_height);
+    t.p3 = LPoint3(x -1, y, _heightfield.get_gray(x-1, y2) * _max_height);
+    triangles.push_back(t);
   }
 
-  int leaf_first_index = 1;
-  for (int i = 1; i <= subdivisions - 1; i++) {
-    leaf_first_index += pow(4, i);
+  if (x + 1 < rows && y + 1 < cols) {
   }
 
-  QuadTreeNode node;
-  QuadTreeNode child;
-  for (int i = nodes_count - 1; i >= 0; i--) {
-    node = nodes[i];
-    PN_stdfloat height_min = INT_MAX;
-    PN_stdfloat height_max = INT_MIN;
-    if (i >= leaf_first_index) {
-      for (int x = node.area.min[0]; x < node.area.max[0]; x++) {
-        for (int y = node.area.min[1]; y < node.area.max[1]; y++) {
-          PN_stdfloat value = _heightfield.get_gray(x, y) * max_height;
-          height_min = std::min(value, height_min);
-          height_max = std::max(value, height_max);
-        }
-      }
-    } else {
-      for (int c = (i * 4) + 1, max = c + 4; c < max; c++) {
-        child = nodes[c];
-        height_min = std::min(child.height_min, height_min);
-        height_max = std::max(child.height_max, height_max);
-      }
-    }
-    nodes[i].height_min = height_min;
-    nodes[i].height_max = height_max;
-  }
-  _nodes = nodes;
-  _nodes_count = nodes_count;
-  _leaf_first_index = leaf_first_index;
+  return triangles;
 }
 
 PT(CollisionEntry) CollisionHeightfield::
@@ -172,12 +118,113 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
   std::sort(intersections.begin(), intersections.end());
 
   PT(CollisionEntry) new_entry = new CollisionEntry(entry);
-  for (int i = 0; i < intersections.size(); i++) {
-    double t = std::min(intersections[i].tmin, intersections[i].tmax);
-    new_entry->set_surface_point(from_origin + from_direction * t);
+  for (unsigned int i = 0; i < intersections.size(); i++) {
+    LPoint3 p1 = from_origin + from_direction * intersections[i].tmin;
+    LPoint3 p2 = from_origin + from_direction * intersections[i].tmax;
+    int m_new = 2 * (p2[1] - p1[1]);
+    int slope_error_new = m_new - (p2[0] - p1[0]);
+
+    bool intersected = false;
+    for (int x = p1[0], y = p1[1]; x <= p2[0]; x++) {
+      vector<Triangle> triangles = get_triangles(x, y);
+
+      for (unsigned int tri = 0; tri < triangles.size(); tri++) {
+        double t;
+
+        if (line_intersects_triangle(t, from_origin, from_direction, triangles[tri])) {
+          MSG("intersection: " << from_origin + from_direction * t);
+          new_entry->set_surface_point(from_origin + from_direction * t);
+          intersected = true;
+          break;
+        } else {
+        }
+      }
+
+
+      slope_error_new += m_new;
+      if (slope_error_new >= 0) {
+        y++;
+        slope_error_new -= 2 * (p2[0] - p1[0]);
+      }
+
+      if (intersected) break;
+    }
+
+    if (intersected) break;
   }
 
   return new_entry;
+}
+
+void CollisionHeightfield::
+setup_quadtree(int subdivisions) {
+  int nodes_count = 0;
+  for (int i = 0; i <= subdivisions; i++) {
+    nodes_count += pow(4, i);
+  }
+  QuadTreeNode *nodes = new QuadTreeNode[nodes_count];
+  nodes[0].area.min = {0, 0};
+  nodes[0].area.max = {(float)_heightfield.get_read_x_size(),
+                       (float)_heightfield.get_read_y_size()};
+  nodes[0].index = 0;
+  QuadTreeNode parent;
+  for (int i = 1; i < nodes_count; i += 4) {
+    parent = nodes[(i-1) / 4];
+    LVector2 sub_area = (parent.area.max - parent.area.min) / 2;
+    // SE Quadrant
+    nodes[i].area.min = parent.area.min;
+    nodes[i].area.max = parent.area.min + sub_area;
+    nodes[i].index = i;
+    // SW Quadrant
+    nodes[i + 1].area.min = {parent.area.min[0] + sub_area[0],
+                             parent.area.min[1]};
+    nodes[i + 1].area.max = nodes[i + 1].area.min + sub_area;
+    nodes[i + 1].index = i + 1;
+    // NE Quadrant
+    nodes[i + 2].area.min = {parent.area.min[0],
+                             parent.area.min[1] + sub_area[1]};
+    nodes[i + 2].area.max = nodes[i + 2].area.min + sub_area;
+    nodes[i + 2].index = i + 2;
+    // NW Quadrant
+    nodes[i + 3].area.min = parent.area.min + sub_area;
+    nodes[i + 3].area.max = parent.area.max;
+    nodes[i + 3].index = i + 3;
+  }
+
+  int leaf_first_index = 1;
+  for (int i = 1; i <= subdivisions - 1; i++) {
+    leaf_first_index += pow(4, i);
+  }
+
+  QuadTreeNode node;
+  QuadTreeNode child;
+  for (int i = nodes_count - 1; i >= 0; i--) {
+    node = nodes[i];
+    PN_stdfloat height_min = INT_MAX;
+    PN_stdfloat height_max = INT_MIN;
+    if (i >= leaf_first_index) {
+      for (int x = node.area.min[0]; x < node.area.max[0]; x++) {
+        for (int y = node.area.min[1]; y < node.area.max[1]; y++) {
+          PN_stdfloat value = _heightfield.get_gray(x,
+            _heightfield.get_read_y_size() - 1 - y) * _max_height;
+
+          height_min = std::min(value, height_min);
+          height_max = std::max(value, height_max);
+        }
+      }
+    } else {
+      for (int c = (i * 4) + 1, max = c + 4; c < max; c++) {
+        child = nodes[c];
+        height_min = std::min(child.height_min, height_min);
+        height_max = std::max(child.height_max, height_max);
+      }
+    }
+    nodes[i].height_min = height_min;
+    nodes[i].height_max = height_max;
+  }
+  _nodes = nodes;
+  _nodes_count = nodes_count;
+  _leaf_first_index = leaf_first_index;
 }
 
 bool CollisionHeightfield::
@@ -214,7 +261,6 @@ line_intersects_box(double &t1, double &t2,
   return true;
 }
 
-
 bool CollisionHeightfield::
 line_intersects_triangle(double &t, const LPoint3 &from,
                          const LPoint3 &delta,
@@ -242,11 +288,11 @@ line_intersects_triangle(double &t, const LPoint3 &from,
     return false;
   }
   t = f * dot(edge2, q);
-  if (t > EPSILON) {
-    return true;
-  } else {
-    return false;
-  }
+  /* if (t > EPSILON) { */
+  return true;
+  /* } else { */
+  /*   return false; */
+  /* } */
 }
 
 /*
