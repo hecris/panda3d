@@ -39,6 +39,8 @@ private:
   void setup_quadtree(int subdivisions);
   std::vector<Triangle> get_triangles(int x, int y) const;
 
+  INLINE double get_height(int x, int y) const;
+
 PUBLISHED:
   INLINE CollisionHeightfield();
   ~CollisionHeightfield() {

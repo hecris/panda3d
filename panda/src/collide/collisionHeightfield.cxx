@@ -51,21 +51,44 @@ CollisionHeightfield(PNMImage &heightfield, double max_height) {
 
 vector<CollisionHeightfield::Triangle> CollisionHeightfield::
 get_triangles(int x, int y) const {
-  vector<Triangle> triangles;
   int rows = _heightfield.get_read_x_size();
   int cols = _heightfield.get_read_y_size();
+  vector<Triangle> triangles;
+  if (x < 0 || y < 0 || x >= rows - 1 || y >= cols - 1)
+    return triangles;
+
   Triangle t;
-  int y2 = cols - y - 1;
-  t.p1 = LPoint3(x, y, _heightfield.get_gray(x, y2) * _max_height);
+  int y2 = cols - 1 - y;
   if (x - 1 >= 0 && y - 1 >= 0) {
-    /* t.p2 = LPoint3(x, cols-1-y-1, _heightfield.get_gray(x, y - 1) * _max_height); */
-    /* t.p3 = LPoint3(x -1, cols-1-y, _heightfield.get_gray(x-1, y) * _max_height); */
-    t.p2 = LPoint3(x, y - 1, _heightfield.get_gray(x, y2 - 1) * _max_height);
-    t.p3 = LPoint3(x -1, y, _heightfield.get_gray(x-1, y2) * _max_height);
+    t.p1 = LPoint3(x, y, get_height(x, y2));
+    t.p2 = LPoint3(x, y - 1, get_height(x, y2 - 1));
+    t.p3 = LPoint3(x -1, y, get_height(x-1, y2));
     triangles.push_back(t);
   }
 
   if (x + 1 < rows && y + 1 < cols) {
+    t.p1 = LPoint3(x, y, get_height(x, y2));
+    t.p2 = LPoint3(x, y+1, get_height(x, y2 + 1));
+    t.p3 = LPoint3(x+1, y, get_height(x + 1, y2));
+    triangles.push_back(t);
+  }
+
+  if (x - 1 >= 0 && y + 1 < cols) {
+    t.p1 = LPoint3(x, y, get_height(x, y2));
+    t.p2 = LPoint3(x-1, y+1, get_height(x-1, y2 + 1));
+    t.p3 = LPoint3(x-1, y, get_height(x-1, y2));
+    triangles.push_back(t);
+    t.p3 = LPoint3(x, y+1, get_height(x, y2+1));
+    triangles.push_back(t);
+  }
+
+  if (x + 1 < rows && y - 1 >= 0) {
+    t.p1 = LPoint3(x, y, get_height(x, y2));
+    t.p2 = LPoint3(x+1, y-1, get_height(x+1, y2-1));
+    t.p3 = LPoint3(x, y-1, get_height(x, y2-1));
+    triangles.push_back(t);
+    t.p3 = LPoint3(x+1, y, get_height(x+1, y2));
+    triangles.push_back(t);
   }
 
   return triangles;
@@ -129,25 +152,24 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
       vector<Triangle> triangles = get_triangles(x, y);
 
       for (unsigned int tri = 0; tri < triangles.size(); tri++) {
+        double min_t = DBL_MAX;
         double t;
-
         if (line_intersects_triangle(t, from_origin, from_direction, triangles[tri])) {
-          MSG("intersection: " << from_origin + from_direction * t);
-          new_entry->set_surface_point(from_origin + from_direction * t);
-          intersected = true;
-          break;
-        } else {
+          if (t < 0) continue;
+          if (t < min_t) {
+            intersected = true;
+            min_t = t;
+            new_entry->set_surface_point(from_origin + from_direction * t);
+          }
         }
       }
-
+      if (intersected) break;
 
       slope_error_new += m_new;
       if (slope_error_new >= 0) {
         y++;
         slope_error_new -= 2 * (p2[0] - p1[0]);
       }
-
-      if (intersected) break;
     }
 
     if (intersected) break;
