@@ -41,8 +41,12 @@ private:
   struct IntersectionParams {
     double t1;
     double t2;
+    // Line
     LPoint3 from_origin;
     LVector3 from_direction;
+    // Sphere
+    LPoint3 center;
+    double radius;
   };
 
   typedef bool (*BoxIntersection)(const LPoint3 &box_min, const LPoint3 &box_max,
@@ -92,10 +96,16 @@ protected:
                                 const Triangle &triangle) const;
 
   static bool line_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
-                           IntersectionParams &params);
+                                  IntersectionParams &params);
+
+  static bool sphere_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
+                                    IntersectionParams &params);
 
   virtual PT(CollisionEntry)
   test_intersection_from_ray(const CollisionEntry &entry) const;
+  virtual PT(CollisionEntry)
+  test_intersection_from_sphere(const CollisionEntry &entry) const;
+
 
   virtual void fill_viz_geom();
 

@@ -43,6 +43,44 @@ CollisionHeightfield(PNMImage &heightfield, double max_height) {
   setup_quadtree(4);
 }
 
+bool CollisionHeightfield::
+sphere_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
+                      IntersectionParams &params) {
+  LPoint3 center = params.center;
+  double radius = params.radius;
+  LPoint3 p = center.fmin(box_max).fmax(box_min);
+  return (center - p).length_squared() <= radius * radius;
+}
+
+PT(CollisionEntry) CollisionHeightfield::
+test_intersection_from_sphere(const CollisionEntry &entry) const {
+  const CollisionSphere *sphere;
+  DCAST_INTO_R(sphere, entry.get_from(), nullptr);
+
+  CPT(TransformState) wrt_space = entry.get_wrt_space();
+  const LMatrix4 &wrt_mat = wrt_space->get_mat();
+
+  LPoint3 center = sphere->get_center() * wrt_mat;
+  LVector3 radius_v = LVector3(sphere->get_radius(), 0.0f, 0.0f) * wrt_mat;
+  PN_stdfloat radius_2 = radius_v.length_squared();
+  PN_stdfloat radius = csqrt(radius_2);
+
+  IntersectionParams params;
+  params.center = center;
+  params.radius = radius;
+
+  vector<QuadTreeIntersection> intersections = find_intersections(
+      sphere_intersects_box, params);
+
+  if (intersections.size() == 0) return nullptr;
+
+  PT(CollisionEntry) new_entry = new CollisionEntry(entry);
+  new_entry->set_surface_point(center);
+  MSG("intersects");
+  return new_entry;
+
+}
+
 vector<CollisionHeightfield::QuadTreeIntersection> CollisionHeightfield::
 find_intersections(BoxIntersection intersects_box, IntersectionParams params) const {
   queue<QuadTreeNode> q;
@@ -136,8 +174,6 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
 
   return new_entry;
 }
-
-/* vector<LPoint3> CollisionHeightfield:: */
 
 vector<CollisionHeightfield::Triangle> CollisionHeightfield::
 get_triangles(int x, int y) const {
