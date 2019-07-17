@@ -36,18 +36,108 @@ using std::queue;
 using std::vector;
 using std::sort;
 
-PStatCollector CollisionHeightfield::_volume_pcollector(
-      "Collision Volumes:CollisionHeightfield");
-PStatCollector CollisionHeightfield::_test_pcollector(
-      "Collision Tests:CollisionHeightfield");
-TypeHandle CollisionHeightfield::_type_handle;
-
 CollisionHeightfield::
 CollisionHeightfield(PNMImage &heightfield, double max_height) {
   _heightfield = heightfield;
   _max_height = max_height;
   setup_quadtree(4);
 }
+
+vector<CollisionHeightfield::QuadTreeIntersection> CollisionHeightfield::
+find_intersections(BoxIntersection intersects_box, IntersectionParams params) const {
+  queue<QuadTreeNode> q;
+  QuadTreeNode node = _nodes[0];
+  q.push(node);
+
+  LPoint3 box_min, box_max;
+  vector<QuadTreeIntersection> intersections;
+
+  while (!q.empty()) {
+    node = q.front();
+    q.pop();
+    box_min = {node.area.min[0], node.area.min[1], node.height_min};
+    box_max = {node.area.max[0], node.area.max[1], node.height_max};
+    if (!intersects_box(box_min, box_max, params)) {
+      continue;
+    }
+
+    if (node.index >= _leaf_first_index) {
+      QuadTreeIntersection intersection = {node.index, params.t1, params.t2};
+      intersections.push_back(intersection);
+    } else {
+      int child_first_index = 4 * node.index + 1;
+      q.push(_nodes[child_first_index]);
+      q.push(_nodes[child_first_index + 1]);
+      q.push(_nodes[child_first_index + 2]);
+      q.push(_nodes[child_first_index + 3]);
+    }
+  }
+
+  return intersections;
+}
+
+PT(CollisionEntry) CollisionHeightfield::
+test_intersection_from_ray(const CollisionEntry &entry) const {
+  const CollisionRay *ray;
+  DCAST_INTO_R(ray, entry.get_from(), nullptr);
+  const LMatrix4 &wrt_mat = entry.get_wrt_mat();
+
+  LPoint3 from_origin = ray->get_origin() * wrt_mat;
+  LPoint3 from_direction = ray->get_direction() * wrt_mat;
+
+  IntersectionParams params;
+  params.from_origin = from_origin;
+  params.from_direction = from_direction;
+  vector<QuadTreeIntersection> intersections = find_intersections(line_intersects_box, params);
+
+  if (intersections.size() == 0) {
+    return nullptr;
+  }
+  std::sort(intersections.begin(), intersections.end());
+
+  PT(CollisionEntry) new_entry = new CollisionEntry(entry);
+  for (unsigned int i = 0; i < intersections.size(); i++) {
+
+    if (intersections[i].tmin < 0.0 && intersections[i].tmax < 0.0) continue;
+    if (intersections[i].tmin < 0.0) intersections[i].tmin = intersections[i].tmax;
+
+    LPoint3 p1 = from_origin + from_direction * intersections[i].tmin;
+    LPoint3 p2 = from_origin + from_direction * intersections[i].tmax;
+    int m_new = 2 * (p2[1] - p1[1]);
+    int slope_error_new = m_new - (p2[0] - p1[0]);
+
+    bool intersected = false;
+    for (int x = p1[0], y = p1[1]; x <= p2[0]; x++) {
+      vector<Triangle> triangles = get_triangles(x, y);
+
+      for (unsigned int tri = 0; tri < triangles.size(); tri++) {
+        double min_t = DBL_MAX;
+        double t;
+        if (line_intersects_triangle(t, from_origin, from_direction, triangles[tri])) {
+          if (t < 0) continue;
+          if (t < min_t) {
+            intersected = true;
+            min_t = t;
+            new_entry->set_surface_point(from_origin + from_direction * t);
+          }
+        }
+      }
+      if (intersected) break;
+
+      slope_error_new += m_new;
+      if (slope_error_new >= 0) {
+        y++;
+        slope_error_new -= 2 * (p2[0] - p1[0]);
+      }
+    }
+
+    if (intersected) break;
+  }
+
+  return new_entry;
+}
+
+/* vector<LPoint3> CollisionHeightfield:: */
 
 vector<CollisionHeightfield::Triangle> CollisionHeightfield::
 get_triangles(int x, int y) const {
@@ -92,90 +182,6 @@ get_triangles(int x, int y) const {
   }
 
   return triangles;
-}
-
-PT(CollisionEntry) CollisionHeightfield::
-test_intersection_from_ray(const CollisionEntry &entry) const {
-  const CollisionRay *ray;
-  DCAST_INTO_R(ray, entry.get_from(), nullptr);
-  const LMatrix4 &wrt_mat = entry.get_wrt_mat();
-
-  LPoint3 from_origin = ray->get_origin() * wrt_mat;
-  LPoint3 from_direction = ray->get_direction() * wrt_mat;
-
-  double t1, t2;
-  queue<QuadTreeNode> q;
-  vector<QuadTreeIntersection> intersections;
-  LPoint3 box_min, box_max;
-  QuadTreeNode node = _nodes[0];
-  q.push(node);
-  while (!q.empty()) {
-    node = q.front();
-    q.pop();
-    box_min = {node.area.min[0],
-               node.area.min[1], node.height_min};
-    box_max = {node.area.max[0],
-               node.area.max[1], node.height_max};
-    if (!line_intersects_box(t1, t2, box_min, box_max, from_origin,
-                             from_direction) || (t1 < 0.0 && t2 < 0.0)) {
-      continue;
-    }
-
-    if (node.index >= _leaf_first_index) {
-      // is a leaf node
-      if (t1 < 0.0) t1 = t2;
-      QuadTreeIntersection intersection = {node.index, t1, t2};
-      intersections.push_back(intersection);
-    } else {
-      int child_first_index = 4 * node.index + 1;
-      q.push(_nodes[child_first_index]);
-      q.push(_nodes[child_first_index + 1]);
-      q.push(_nodes[child_first_index + 2]);
-      q.push(_nodes[child_first_index + 3]);
-    }
-  }
-
-  if (intersections.size() == 0) {
-    return nullptr;
-  }
-  std::sort(intersections.begin(), intersections.end());
-
-  PT(CollisionEntry) new_entry = new CollisionEntry(entry);
-  for (unsigned int i = 0; i < intersections.size(); i++) {
-    LPoint3 p1 = from_origin + from_direction * intersections[i].tmin;
-    LPoint3 p2 = from_origin + from_direction * intersections[i].tmax;
-    int m_new = 2 * (p2[1] - p1[1]);
-    int slope_error_new = m_new - (p2[0] - p1[0]);
-
-    bool intersected = false;
-    for (int x = p1[0], y = p1[1]; x <= p2[0]; x++) {
-      vector<Triangle> triangles = get_triangles(x, y);
-
-      for (unsigned int tri = 0; tri < triangles.size(); tri++) {
-        double min_t = DBL_MAX;
-        double t;
-        if (line_intersects_triangle(t, from_origin, from_direction, triangles[tri])) {
-          if (t < 0) continue;
-          if (t < min_t) {
-            intersected = true;
-            min_t = t;
-            new_entry->set_surface_point(from_origin + from_direction * t);
-          }
-        }
-      }
-      if (intersected) break;
-
-      slope_error_new += m_new;
-      if (slope_error_new >= 0) {
-        y++;
-        slope_error_new -= 2 * (p2[0] - p1[0]);
-      }
-    }
-
-    if (intersected) break;
-  }
-
-  return new_entry;
 }
 
 void CollisionHeightfield::
@@ -250,13 +256,13 @@ setup_quadtree(int subdivisions) {
 }
 
 bool CollisionHeightfield::
-line_intersects_box(double &t1, double &t2,
-                    const LPoint3 &box_min, const LPoint3 &box_max,
-                    const LPoint3 &from, const LVector3 &delta) const {
+line_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
+                    IntersectionParams &params) {
+  LPoint3 from = params.from_origin;
+  LPoint3 delta = params.from_direction;
 
   double tmin = -DBL_MAX;
   double tmax = DBL_MAX;
-
   for (int i = 0; i < 3; ++i) {
     PN_stdfloat d = delta[i];
     if (!IS_NEARLY_ZERO(d)) {
@@ -267,19 +273,16 @@ line_intersects_box(double &t1, double &t2,
       }
       tmin = std::max(tmin, tmin2);
       tmax = std::min(tmax, tmax2);
-
       if (tmin > tmax) {
         return false;
       }
-
     } else if (from[i] < box_min[i] || from[i] > box_max[i]) {
       // The line is parallel
       return false;
     }
   }
-
-  t1 = tmin;
-  t2 = tmax;
+  params.t1 = tmin;
+  params.t2 = tmax;
   return true;
 }
 
@@ -310,11 +313,7 @@ line_intersects_triangle(double &t, const LPoint3 &from,
     return false;
   }
   t = f * dot(edge2, q);
-  /* if (t > EPSILON) { */
   return true;
-  /* } else { */
-  /*   return false; */
-  /* } */
 }
 
 /*
@@ -373,3 +372,9 @@ void CollisionHeightfield::
 register_with_read_factory() {
   BamReader::get_factory()->register_factory(get_class_type(), make_CollisionHeightfield);
 }
+
+PStatCollector CollisionHeightfield::_volume_pcollector(
+      "Collision Volumes:CollisionHeightfield");
+PStatCollector CollisionHeightfield::_test_pcollector(
+      "Collision Tests:CollisionHeightfield");
+TypeHandle CollisionHeightfield::_type_handle;

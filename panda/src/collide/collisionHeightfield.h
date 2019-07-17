@@ -5,7 +5,11 @@
 #include "collisionSolid.h"
 #include "pnmImage.h"
 
+using std::vector;
+
 class EXPCL_PANDA_COLLIDE CollisionHeightfield : public CollisionSolid {
+
+
 private:
   struct Triangle {
     LPoint3 p1;
@@ -34,10 +38,21 @@ private:
     }
   };
 
+  struct IntersectionParams {
+    double t1;
+    double t2;
+    LPoint3 from_origin;
+    LVector3 from_direction;
+  };
+
+  typedef bool (*BoxIntersection)(const LPoint3 &box_min, const LPoint3 &box_max,
+                                  IntersectionParams &params);
   double _max_height;
 
   void setup_quadtree(int subdivisions);
-  std::vector<Triangle> get_triangles(int x, int y) const;
+  vector<QuadTreeIntersection> find_intersections(BoxIntersection intersects_box,
+                                                  IntersectionParams params) const;
+  vector<Triangle> get_triangles(int x, int y) const;
 
   INLINE double get_height(int x, int y) const;
 
@@ -76,9 +91,8 @@ protected:
                                 const LPoint3 &delta,
                                 const Triangle &triangle) const;
 
-  bool line_intersects_box(double &t1, double &t2,
-                           const LPoint3 &box_min, const LPoint3 &box_max,
-                           const LPoint3 &from, const LVector3 &delta) const;
+  static bool line_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
+                           IntersectionParams &params);
 
   virtual PT(CollisionEntry)
   test_intersection_from_ray(const CollisionEntry &entry) const;
