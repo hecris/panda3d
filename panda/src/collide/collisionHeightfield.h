@@ -88,6 +88,8 @@ protected:
   virtual PT(CollisionEntry)
   test_intersection_from_box(const CollisionEntry &entry) const;
 
+  LPoint3 closest_point_on_triangle(const LPoint3 &p, const Triangle &triangle) const;
+
 
 
   virtual void fill_viz_geom();
