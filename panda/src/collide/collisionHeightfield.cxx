@@ -40,16 +40,14 @@ CollisionHeightfield::
 CollisionHeightfield(PNMImage &heightfield, double max_height) {
   _heightfield = heightfield;
   _max_height = max_height;
-  setup_quadtree(4);
+  setup_quadtree(1);
 }
 
 bool CollisionHeightfield::
-sphere_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
-                      IntersectionParams &params) {
-  LPoint3 center = params.center;
-  double radius = params.radius;
-  LPoint3 p = center.fmin(box_max).fmax(box_min);
-  return (center - p).length_squared() <= radius * radius;
+sphere_intersects_triangle(LPoint3 &intersection_point,
+                           const LPoint3 &center, double radius,
+                           const Triangle &triangle) const {
+  return true;
 }
 
 PT(CollisionEntry) CollisionHeightfield::
@@ -80,6 +78,52 @@ test_intersection_from_sphere(const CollisionEntry &entry) const {
   return new_entry;
 
 }
+
+bool CollisionHeightfield::
+sphere_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
+                      IntersectionParams &params) {
+  LPoint3 center = params.center;
+  double radius = params.radius;
+  LPoint3 p = center.fmin(box_max).fmax(box_min);
+  return (center - p).length_squared() <= radius * radius;
+}
+
+PT(CollisionEntry) CollisionHeightfield::
+test_intersection_from_box(const CollisionEntry &entry) const {
+  const CollisionBox *box;
+  DCAST_INTO_R(box, entry.get_from(), nullptr);
+
+  const LMatrix4 &wrt_mat = entry.get_wrt_mat();
+  LPoint3 box_min = box->get_min() * wrt_mat;
+  LPoint3 box_max = box->get_max() * wrt_mat;
+
+  IntersectionParams params;
+  params.box_min = box_min;
+  params.box_max = box_max;
+
+  vector<QuadTreeIntersection> intersections = find_intersections(
+      box_intersects_box, params);
+
+  if (intersections.size() == 0) {
+    return nullptr;
+  }
+
+  PT(CollisionEntry) new_entry = new CollisionEntry(entry);
+  new_entry->set_surface_point(box_min);
+  MSG("int");
+  return new_entry;
+}
+
+bool CollisionHeightfield::
+box_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
+                   IntersectionParams &params) {
+
+  return (box_min[0] <= params.box_max[0] && box_max[0] >= params.box_min[0]) &&
+         (box_min[1] <= params.box_max[1] && box_max[1] >= params.box_min[1]) &&
+         (box_min[2] <= params.box_max[2] && box_max[2] >= params.box_min[2]);
+}
+
+
 
 vector<CollisionHeightfield::QuadTreeIntersection> CollisionHeightfield::
 find_intersections(BoxIntersection intersects_box, IntersectionParams params) const {
@@ -255,7 +299,7 @@ setup_quadtree(int subdivisions) {
     nodes[i + 3].index = i + 3;
   }
 
-  int leaf_first_index = 1;
+  int leaf_first_index = 0;
   for (int i = 1; i <= subdivisions - 1; i++) {
     leaf_first_index += pow(4, i);
   }

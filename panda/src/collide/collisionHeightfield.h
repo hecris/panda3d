@@ -39,14 +39,17 @@ private:
   };
 
   struct IntersectionParams {
+    // From Line
     double t1;
     double t2;
-    // Line
     LPoint3 from_origin;
     LVector3 from_direction;
-    // Sphere
+    // From Sphere
     LPoint3 center;
     double radius;
+    // From Box
+    LPoint3 box_min;
+    LPoint3 box_max;
   };
 
   typedef bool (*BoxIntersection)(const LPoint3 &box_min, const LPoint3 &box_max,
@@ -59,6 +62,36 @@ private:
   vector<Triangle> get_triangles(int x, int y) const;
 
   INLINE double get_height(int x, int y) const;
+
+protected:
+  static bool line_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
+                                  IntersectionParams &params);
+
+  bool line_intersects_triangle(double &t, const LPoint3 &from,
+                                const LPoint3 &delta,
+                                const Triangle &triangle) const;
+
+  static bool sphere_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
+                                    IntersectionParams &params);
+
+  bool sphere_intersects_triangle(LPoint3 &intersection_point,
+                                  const LPoint3 &center, double radius,
+                                  const Triangle &triangle) const;
+
+  static bool box_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
+                                 IntersectionParams &params);
+
+  virtual PT(CollisionEntry)
+  test_intersection_from_ray(const CollisionEntry &entry) const;
+  virtual PT(CollisionEntry)
+  test_intersection_from_sphere(const CollisionEntry &entry) const;
+  virtual PT(CollisionEntry)
+  test_intersection_from_box(const CollisionEntry &entry) const;
+
+
+
+  virtual void fill_viz_geom();
+
 
 PUBLISHED:
   INLINE CollisionHeightfield();
@@ -88,26 +121,6 @@ public:
 
 protected:
   virtual PT(BoundingVolume) compute_internal_bounds() const;
-
-protected:
-  // Todo: make sure this works for line, not just ray
-  bool line_intersects_triangle(double &t, const LPoint3 &from,
-                                const LPoint3 &delta,
-                                const Triangle &triangle) const;
-
-  static bool line_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
-                                  IntersectionParams &params);
-
-  static bool sphere_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
-                                    IntersectionParams &params);
-
-  virtual PT(CollisionEntry)
-  test_intersection_from_ray(const CollisionEntry &entry) const;
-  virtual PT(CollisionEntry)
-  test_intersection_from_sphere(const CollisionEntry &entry) const;
-
-
-  virtual void fill_viz_geom();
 
 private:
   static PStatCollector _volume_pcollector;
