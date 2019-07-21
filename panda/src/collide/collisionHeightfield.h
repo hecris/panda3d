@@ -8,15 +8,15 @@
 using std::vector;
 
 class EXPCL_PANDA_COLLIDE CollisionHeightfield : public CollisionSolid {
+PUBLISHED:
+  INLINE CollisionHeightfield();
+  ~CollisionHeightfield() { delete[] _nodes; }
+  CollisionHeightfield(PNMImage &heightfield,
+                       double max_height, int subdivisions);
+  virtual LPoint3 get_collision_origin() const;
+  INLINE PNMImage &heightfield();
 
-
-private:
-  struct Triangle {
-    LPoint3 p1;
-    LPoint3 p2;
-    LPoint3 p3;
-  };
-
+protected:
   struct Rect {
     LVector2 min;
     LVector2 max;
@@ -52,35 +52,53 @@ private:
     LPoint3 box_max;
   };
 
-  typedef bool (*BoxIntersection)(const LPoint3 &box_min, const LPoint3 &box_max,
-                                  IntersectionParams &params);
-  double _max_height;
+  struct Triangle {
+    LPoint3 p1;
+    LPoint3 p2;
+    LPoint3 p3;
+  };
 
+private:
+  PNMImage _heightfield;
+  double _max_height;
+  // Todo: PT(QuadTreeNode) _nodes;
+  QuadTreeNode *_nodes;
+  int _nodes_count;
+  int _leaf_first_index;
   void setup_quadtree(int subdivisions);
-  vector<QuadTreeIntersection> find_intersections(BoxIntersection intersects_box,
-                                                  IntersectionParams params) const;
+  INLINE double get_height(int x, int y) const;
   vector<Triangle> get_triangles(int x, int y) const;
 
-  INLINE double get_height(int x, int y) const;
+  typedef bool (*BoxIntersection)(const LPoint3 &box_min, const LPoint3 &box_max,
+                                  IntersectionParams &params);
+
+  vector<QuadTreeIntersection> find_intersections(BoxIntersection intersects_box,
+                                                  IntersectionParams params) const;
 
 protected:
+  static LPoint3 closest_point_on_triangle(const LPoint3 &p, const Triangle &triangle);
+
   static bool line_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
                                   IntersectionParams &params);
 
-  bool line_intersects_triangle(double &t, const LPoint3 &from,
+  static bool line_intersects_triangle(double &t, const LPoint3 &from,
                                 const LPoint3 &delta,
-                                const Triangle &triangle) const;
+                                const Triangle &triangle);
 
   static bool sphere_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
                                     IntersectionParams &params);
 
-  bool sphere_intersects_triangle(LPoint3 &intersection_point,
+  static bool sphere_intersects_triangle(LPoint3 &intersection_point,
                                   const LPoint3 &center, double radius,
-                                  const Triangle &triangle) const;
+                                  const Triangle &triangle);
 
   static bool box_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
                                  IntersectionParams &params);
 
+  static bool box_intersects_triangle(const LPoint3 &box_min, const LPoint3 &box_max,
+                               const Triangle &triangle);
+
+protected:
   virtual PT(CollisionEntry)
   test_intersection_from_ray(const CollisionEntry &entry) const;
   virtual PT(CollisionEntry)
@@ -88,31 +106,9 @@ protected:
   virtual PT(CollisionEntry)
   test_intersection_from_box(const CollisionEntry &entry) const;
 
-  LPoint3 closest_point_on_triangle(const LPoint3 &p, const Triangle &triangle) const;
-
-
-
   virtual void fill_viz_geom();
 
-
-PUBLISHED:
-  INLINE CollisionHeightfield();
-  ~CollisionHeightfield() {
-    delete[] _nodes;
-  }
-  CollisionHeightfield(PNMImage &heightfield, double max_height);
-  virtual LPoint3 get_collision_origin() const;
-
-private:
-  PNMImage _heightfield;
-  // Todo: PT(QuadTreeNode) _nodes;
-  QuadTreeNode *_nodes;
-  int _nodes_count;
-  int _leaf_first_index;
-
 public:
-  INLINE PNMImage &heightfield();
-
   INLINE CollisionHeightfield(const CollisionHeightfield &copy);
   virtual CollisionSolid *make_copy();
 
