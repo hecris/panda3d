@@ -69,6 +69,8 @@ private:
   INLINE double get_height(int x, int y) const;
   vector<Triangle> get_triangles(int x, int y) const;
 
+  // A pointer to a function that tests for intersection between a box and a
+  // solid defined by the given IntersectionParams.
   typedef bool (*BoxIntersection)(const LPoint3 &box_min, const LPoint3 &box_max,
                                   IntersectionParams &params);
 

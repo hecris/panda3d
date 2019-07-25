@@ -1,4 +1,3 @@
-#define MSG(s) collide_cat.error() << s << '\n';
 /**
  * PANDA 3D SOFTWARE
  * Copyright (c) Carnegie Mellon University.  All rights reserved.
@@ -24,6 +23,7 @@
 #include "bamWriter.h"
 #include <queue>
 #include <algorithm>
+#define MSG(s) collide_cat.error() << s << '\n';
 
 using std::min;
 using std::max;
@@ -40,43 +40,65 @@ CollisionHeightfield(PNMImage &heightfield,
 }
 
 PT(CollisionEntry) CollisionHeightfield::
-test_intersection_from_box(const CollisionEntry &entry) const {
-  const CollisionBox *box;
-  DCAST_INTO_R(box, entry.get_from(), nullptr);
-
+test_intersection_from_ray(const CollisionEntry &entry) const {
+  const CollisionRay *ray;
+  DCAST_INTO_R(ray, entry.get_from(), nullptr);
   const LMatrix4 &wrt_mat = entry.get_wrt_mat();
-  LPoint3 box_min = box->get_min() * wrt_mat;
-  LPoint3 box_max = box->get_max() * wrt_mat;
+
+  LPoint3 from_origin = ray->get_origin() * wrt_mat;
+  LPoint3 from_direction = ray->get_direction() * wrt_mat;
 
   IntersectionParams params;
-  params.box_min = box_min;
-  params.box_max = box_max;
-
+  params.from_origin = from_origin;
+  params.from_direction = from_direction;
   vector<QuadTreeIntersection> intersections;
-  intersections = find_intersections(box_intersects_box, params);
+  intersections = find_intersections(line_intersects_box, params);
 
   if (intersections.size() == 0) {
     return nullptr;
   }
+  std::sort(intersections.begin(), intersections.end());
 
   PT(CollisionEntry) new_entry = new CollisionEntry(entry);
-  LPoint3 point;
+  bool intersected = false;
   for (unsigned i = 0; i < intersections.size(); i++) {
-    QuadTreeNode node = _nodes[intersections[i].node_index];
-    for (int x = node.area.min[0]; x < node.area.max[0]; x++) {
-      for (int y = node.area.min[0]; y < node.area.max[1]; y++) {
-        vector<Triangle> triangles = get_triangles(x, y);
-        for (unsigned tri = 0; tri < triangles.size(); tri++) {
-          if (box_intersects_triangle(box_min, box_max, triangles[tri])) {
-            /* MSG("int"); */
-            new_entry->set_surface_point(box_min);
+
+    if (intersections[i].tmin < 0.0 && intersections[i].tmax < 0.0) continue;
+    if (intersections[i].tmin < 0.0) intersections[i].tmin = intersections[i].tmax;
+
+    LPoint3 p1 = from_origin + from_direction * intersections[i].tmin;
+    LPoint3 p2 = from_origin + from_direction * intersections[i].tmax;
+    // We use Bresenhaum's Line Algorithm to directly get the heightfield
+    // coordinates that the line passes through.
+    int m_new = 2 * (p2[1] - p1[1]);
+    int slope_error_new = m_new - (p2[0] - p1[0]);
+
+    for (int x = p1[0], y = p1[1]; x <= p2[0]; x++) {
+      vector<Triangle> triangles = get_triangles(x, y);
+
+      for (unsigned tri = 0; tri < triangles.size(); tri++) {
+        double min_t = DBL_MAX;
+        double t;
+        if (line_intersects_triangle(t, from_origin, from_direction, triangles[tri])) {
+          if (t < 0) continue;
+          if (t < min_t) {
+            intersected = true;
+            min_t = t;
+            new_entry->set_surface_point(from_origin + from_direction * t);
           }
         }
+      }
+      if (intersected) return new_entry;
+
+      slope_error_new += m_new;
+      if (slope_error_new >= 0) {
+        y++;
+        slope_error_new -= 2 * (p2[0] - p1[0]);
       }
     }
   }
 
- return new_entry;
+  return nullptr;
 }
 
 PT(CollisionEntry) CollisionHeightfield::
@@ -103,6 +125,7 @@ test_intersection_from_sphere(const CollisionEntry &entry) const {
 
   PT(CollisionEntry) new_entry = new CollisionEntry(entry);
   LPoint3 point;
+  bool intersected = false;
   for (unsigned i = 0; i < intersections.size(); i++) {
     QuadTreeNode node = _nodes[intersections[i].node_index];
     for (int x = node.area.min[0]; x < node.area.max[0]; x++) {
@@ -110,6 +133,7 @@ test_intersection_from_sphere(const CollisionEntry &entry) const {
         vector<Triangle> triangles = get_triangles(x, y);
         for (unsigned tri = 0; tri < triangles.size(); tri++) {
           if (sphere_intersects_triangle(point, center, radius, triangles[tri])) {
+            intersected = true;
             new_entry->set_surface_point(point);
           }
         }
@@ -117,75 +141,141 @@ test_intersection_from_sphere(const CollisionEntry &entry) const {
     }
   }
 
-  return new_entry;
+  if (intersected) {
+    return new_entry;
+  } else {
+    return nullptr;
+  }
 
 }
 
 PT(CollisionEntry) CollisionHeightfield::
-test_intersection_from_ray(const CollisionEntry &entry) const {
-  const CollisionRay *ray;
-  DCAST_INTO_R(ray, entry.get_from(), nullptr);
-  const LMatrix4 &wrt_mat = entry.get_wrt_mat();
+test_intersection_from_box(const CollisionEntry &entry) const {
+  const CollisionBox *box;
+  DCAST_INTO_R(box, entry.get_from(), nullptr);
 
-  LPoint3 from_origin = ray->get_origin() * wrt_mat;
-  LPoint3 from_direction = ray->get_direction() * wrt_mat;
+  const LMatrix4 &wrt_mat = entry.get_wrt_mat();
+  LPoint3 box_min = box->get_min() * wrt_mat;
+  LPoint3 box_max = box->get_max() * wrt_mat;
 
   IntersectionParams params;
-  params.from_origin = from_origin;
-  params.from_direction = from_direction;
+  params.box_min = box_min;
+  params.box_max = box_max;
+
   vector<QuadTreeIntersection> intersections;
-  intersections = find_intersections(line_intersects_box, params);
+  intersections = find_intersections(box_intersects_box, params);
 
   if (intersections.size() == 0) {
     return nullptr;
   }
-  std::sort(intersections.begin(), intersections.end());
 
   PT(CollisionEntry) new_entry = new CollisionEntry(entry);
+  LPoint3 point;
+  bool intersected = false;
   for (unsigned i = 0; i < intersections.size(); i++) {
-
-    if (intersections[i].tmin < 0.0 && intersections[i].tmax < 0.0) continue;
-    if (intersections[i].tmin < 0.0) intersections[i].tmin = intersections[i].tmax;
-
-    LPoint3 p1 = from_origin + from_direction * intersections[i].tmin;
-    LPoint3 p2 = from_origin + from_direction * intersections[i].tmax;
-    int m_new = 2 * (p2[1] - p1[1]);
-    int slope_error_new = m_new - (p2[0] - p1[0]);
-
-    bool intersected = false;
-    for (int x = p1[0], y = p1[1]; x <= p2[0]; x++) {
-      vector<Triangle> triangles = get_triangles(x, y);
-
-      for (unsigned tri = 0; tri < triangles.size(); tri++) {
-        double min_t = DBL_MAX;
-        double t;
-        if (line_intersects_triangle(t, from_origin, from_direction, triangles[tri])) {
-          if (t < 0) continue;
-          if (t < min_t) {
+    QuadTreeNode node = _nodes[intersections[i].node_index];
+    for (int x = node.area.min[0]; x < node.area.max[0]; x++) {
+      for (int y = node.area.min[0]; y < node.area.max[1]; y++) {
+        vector<Triangle> triangles = get_triangles(x, y);
+        for (unsigned tri = 0; tri < triangles.size(); tri++) {
+          if (box_intersects_triangle(box_min, box_max, triangles[tri])) {
             intersected = true;
-            min_t = t;
-            new_entry->set_surface_point(from_origin + from_direction * t);
+            new_entry->set_surface_point(box_min);
           }
         }
       }
-      if (intersected) break;
-
-      slope_error_new += m_new;
-      if (slope_error_new >= 0) {
-        y++;
-        slope_error_new -= 2 * (p2[0] - p1[0]);
-      }
     }
-
-    if (intersected) break;
   }
 
-  return new_entry;
+  if (intersected) {
+    return new_entry;
+  } else {
+    return nullptr;
+  }
+}
+
+bool CollisionHeightfield::
+line_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
+                    IntersectionParams &params) {
+  LPoint3 from = params.from_origin;
+  LPoint3 delta = params.from_direction;
+
+  double tmin = -DBL_MAX;
+  double tmax = DBL_MAX;
+  for (int i = 0; i < 3; ++i) {
+    PN_stdfloat d = delta[i];
+    if (!IS_NEARLY_ZERO(d)) {
+      double tmin2 = (box_min[i] - from[i]) / d;
+      double tmax2 = (box_max[i] - from[i]) / d;
+      if (tmin2 > tmax2) {
+        std::swap(tmin2, tmax2);
+      }
+      tmin = std::max(tmin, tmin2);
+      tmax = std::min(tmax, tmax2);
+      if (tmin > tmax) {
+        return false;
+      }
+    } else if (from[i] < box_min[i] || from[i] > box_max[i]) {
+      // The line is parallel
+      return false;
+    }
+  }
+  params.t1 = tmin;
+  params.t2 = tmax;
+  return true;
+}
+
+bool CollisionHeightfield::
+line_intersects_triangle(double &t, const LPoint3 &from,
+                         const LPoint3 &delta,
+                         const Triangle &triangle) {
+  const PN_stdfloat EPSILON = 1.0e-7;
+  PN_stdfloat a,f,u,v;
+  LVector3 edge1, edge2, h, s, q;
+  edge1 = triangle.p2 - triangle.p1;
+  edge2 = triangle.p3 - triangle.p1;
+  h = delta.cross(edge2);
+  a = dot(edge1, h);
+  if (a > -EPSILON && a < EPSILON) {
+    // line parallel to triangle
+    return false;
+  }
+  f = 1.0 / a;
+  s = from - triangle.p1;
+  u = f * dot(s, h);
+  if (u < 0.0 || u > 1.0) {
+    return false;
+  }
+  q = s.cross(edge1);
+  v = f * dot(delta, q);
+  if (v < 0.0 || u + v > 1.0) {
+    return false;
+  }
+  t = f * dot(edge2, q);
+  return true;
+}
+
+bool CollisionHeightfield::
+sphere_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
+                      IntersectionParams &params) {
+  LPoint3 center = params.center;
+  double radius = params.radius;
+  LPoint3 p = center.fmin(box_max).fmax(box_min);
+  return (center - p).length_squared() <= radius * radius;
+}
+
+bool CollisionHeightfield::
+sphere_intersects_triangle(LPoint3 &intersection_point,
+                           const LPoint3 &center, double radius,
+                           const Triangle &triangle) {
+  intersection_point = closest_point_on_triangle(center, triangle);
+  return (intersection_point - center).length_squared() <= radius * radius;
 }
 
 bool CollisionHeightfield::
 box_intersects_triangle(const LPoint3 &box_min, const LPoint3 &box_max,
                         const Triangle &triangle) {
+  // Using the Seperating Axis Theorem, we have a maximum of 13 SAT tests
   LPoint3 v0 = triangle.p1, v1 = triangle.p2, v2 = triangle.p3;
 
   PN_stdfloat p0, p1, p2, r;
@@ -271,84 +361,7 @@ box_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
          (box_min[2] <= params.box_max[2] && box_max[2] >= params.box_min[2]);
 }
 
-bool CollisionHeightfield::
-sphere_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
-                      IntersectionParams &params) {
-  LPoint3 center = params.center;
-  double radius = params.radius;
-  LPoint3 p = center.fmin(box_max).fmax(box_min);
-  return (center - p).length_squared() <= radius * radius;
-}
-
-bool CollisionHeightfield::
-sphere_intersects_triangle(LPoint3 &intersection_point,
-                           const LPoint3 &center, double radius,
-                           const Triangle &triangle) {
-  intersection_point = closest_point_on_triangle(center, triangle);
-  return (intersection_point - center).length_squared() <= radius * radius;
-}
-
-bool CollisionHeightfield::
-line_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
-                    IntersectionParams &params) {
-  LPoint3 from = params.from_origin;
-  LPoint3 delta = params.from_direction;
-
-  double tmin = -DBL_MAX;
-  double tmax = DBL_MAX;
-  for (int i = 0; i < 3; ++i) {
-    PN_stdfloat d = delta[i];
-    if (!IS_NEARLY_ZERO(d)) {
-      double tmin2 = (box_min[i] - from[i]) / d;
-      double tmax2 = (box_max[i] - from[i]) / d;
-      if (tmin2 > tmax2) {
-        std::swap(tmin2, tmax2);
-      }
-      tmin = std::max(tmin, tmin2);
-      tmax = std::min(tmax, tmax2);
-      if (tmin > tmax) {
-        return false;
-      }
-    } else if (from[i] < box_min[i] || from[i] > box_max[i]) {
-      // The line is parallel
-      return false;
-    }
-  }
-  params.t1 = tmin;
-  params.t2 = tmax;
-  return true;
-}
-
-bool CollisionHeightfield::
-line_intersects_triangle(double &t, const LPoint3 &from,
-                         const LPoint3 &delta,
-                         const Triangle &triangle) {
-  const PN_stdfloat EPSILON = 1.0e-7;
-  PN_stdfloat a,f,u,v;
-  LVector3 edge1, edge2, h, s, q;
-  edge1 = triangle.p2 - triangle.p1;
-  edge2 = triangle.p3 - triangle.p1;
-  h = delta.cross(edge2);
-  a = dot(edge1, h);
-  if (a > -EPSILON && a < EPSILON) {
-    // line parallel to triangle
-    return false;
-  }
-  f = 1.0 / a;
-  s = from - triangle.p1;
-  u = f * dot(s, h);
-  if (u < 0.0 || u > 1.0) {
-    return false;
-  }
-  q = s.cross(edge1);
-  v = f * dot(delta, q);
-  if (v < 0.0 || u + v > 1.0) {
-    return false;
-  }
-  t = f * dot(edge2, q);
-  return true;
-}
-
+// Returns the closest point on a triangle to another given point.
 LPoint3 CollisionHeightfield::
 closest_point_on_triangle(const LPoint3 &p, const Triangle &triangle) {
   LVector3 ab = triangle.p2 - triangle.p1;
@@ -427,6 +440,8 @@ find_intersections(BoxIntersection intersects_box, IntersectionParams params) co
   return intersections;
 }
 
+// Given a coordinate on the heightfield, return the triangles that
+// are defined at this point in 3D space.
 vector<CollisionHeightfield::Triangle> CollisionHeightfield::
 get_triangles(int x, int y) const {
   int rows = _heightfield.get_read_x_size();
