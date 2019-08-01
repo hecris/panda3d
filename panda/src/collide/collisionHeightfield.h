@@ -9,10 +9,9 @@ using std::vector;
 
 class EXPCL_PANDA_COLLIDE CollisionHeightfield : public CollisionSolid {
 PUBLISHED:
-  INLINE CollisionHeightfield();
-  ~CollisionHeightfield() { delete[] _nodes; }
   CollisionHeightfield(PNMImage &heightfield,
                        double max_height, int subdivisions);
+  ~CollisionHeightfield() { delete[] _nodes; }
   virtual LPoint3 get_collision_origin() const;
   INLINE PNMImage &heightfield();
 
@@ -123,6 +122,7 @@ protected:
   virtual PT(BoundingVolume) compute_internal_bounds() const;
 
 private:
+  INLINE CollisionHeightfield();
   static PStatCollector _volume_pcollector;
   static PStatCollector _test_pcollector;
 

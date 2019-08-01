@@ -129,7 +129,7 @@ test_intersection_from_sphere(const CollisionEntry &entry) const {
   for (unsigned i = 0; i < intersections.size(); i++) {
     QuadTreeNode node = _nodes[intersections[i].node_index];
     for (int x = node.area.min[0]; x < node.area.max[0]; x++) {
-      for (int y = node.area.min[0]; y < node.area.max[1]; y++) {
+      for (int y = node.area.min[1]; y < node.area.max[1]; y++) {
         vector<Triangle> triangles = get_triangles(x, y);
         for (unsigned tri = 0; tri < triangles.size(); tri++) {
           if (sphere_intersects_triangle(point, center, radius, triangles[tri])) {
@@ -175,7 +175,7 @@ test_intersection_from_box(const CollisionEntry &entry) const {
   for (unsigned i = 0; i < intersections.size(); i++) {
     QuadTreeNode node = _nodes[intersections[i].node_index];
     for (int x = node.area.min[0]; x < node.area.max[0]; x++) {
-      for (int y = node.area.min[0]; y < node.area.max[1]; y++) {
+      for (int y = node.area.min[1]; y < node.area.max[1]; y++) {
         vector<Triangle> triangles = get_triangles(x, y);
         for (unsigned tri = 0; tri < triangles.size(); tri++) {
           if (box_intersects_triangle(box_min, box_max, triangles[tri])) {
@@ -454,33 +454,33 @@ get_triangles(int x, int y) const {
   int y2 = cols - 1 - y;
   if (x - 1 >= 0 && y2 - 1 >= 0) {
     t.p1 = LPoint3(x, y, get_height(x, y2));
-    t.p2 = LPoint3(x, y - 1, get_height(x, y2 - 1));
-    t.p3 = LPoint3(x -1, y, get_height(x-1, y2));
+    t.p2 = LPoint3(x, y + 1, get_height(x, y2 - 1));
+    t.p3 = LPoint3(x - 1, y, get_height(x - 1, y2));
     triangles.push_back(t);
   }
 
   if (x + 1 < rows && y2 + 1 < cols) {
     t.p1 = LPoint3(x, y, get_height(x, y2));
-    t.p2 = LPoint3(x, y+1, get_height(x, y2 + 1));
-    t.p3 = LPoint3(x+1, y, get_height(x + 1, y2));
+    t.p2 = LPoint3(x, y - 1, get_height(x, y2 + 1));
+    t.p3 = LPoint3(x + 1, y, get_height(x + 1, y2));
     triangles.push_back(t);
   }
 
   if (x - 1 >= 0 && y2 + 1 < cols) {
     t.p1 = LPoint3(x, y, get_height(x, y2));
-    t.p2 = LPoint3(x-1, y+1, get_height(x-1, y2 + 1));
-    t.p3 = LPoint3(x-1, y, get_height(x-1, y2));
+    t.p2 = LPoint3(x - 1, y - 1, get_height(x - 1, y2 + 1));
+    t.p3 = LPoint3(x - 1, y, get_height(x - 1, y2));
     triangles.push_back(t);
-    t.p3 = LPoint3(x, y+1, get_height(x, y2+1));
+    t.p3 = LPoint3(x, y - 1, get_height(x, y2 + 1));
     triangles.push_back(t);
   }
 
   if (x + 1 < rows && y2 - 1 >= 0) {
     t.p1 = LPoint3(x, y, get_height(x, y2));
-    t.p2 = LPoint3(x+1, y-1, get_height(x+1, y2-1));
-    t.p3 = LPoint3(x, y-1, get_height(x, y2-1));
+    t.p2 = LPoint3(x + 1, y + 1, get_height(x + 1, y2 - 1));
+    t.p3 = LPoint3(x, y + 1, get_height(x, y2 - 1));
     triangles.push_back(t);
-    t.p3 = LPoint3(x+1, y, get_height(x+1, y2));
+    t.p3 = LPoint3(x + 1, y, get_height(x + 1, y2));
     triangles.push_back(t);
   }
 
