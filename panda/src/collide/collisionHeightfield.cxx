@@ -23,7 +23,12 @@
 #include "bamWriter.h"
 #include <queue>
 #include <algorithm>
+// Utilities to time collision tests, will be removed
 #define MSG(s) collide_cat.error() << s << '\n';
+#include <chrono>
+using namespace std::chrono;
+#define TIMER_START auto start = high_resolution_clock::now();
+#define TIMER_STOP auto stop = high_resolution_clock::now(); auto duration = duration_cast<microseconds>(stop - start);  MSG(duration.count());
 
 using std::min;
 using std::max;
@@ -103,6 +108,7 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
 
 PT(CollisionEntry) CollisionHeightfield::
 test_intersection_from_sphere(const CollisionEntry &entry) const {
+  TIMER_START;
   const CollisionSphere *sphere;
   DCAST_INTO_R(sphere, entry.get_from(), nullptr);
 
@@ -140,13 +146,12 @@ test_intersection_from_sphere(const CollisionEntry &entry) const {
       }
     }
   }
-
+  TIMER_STOP;
   if (intersected) {
     return new_entry;
   } else {
     return nullptr;
   }
-
 }
 
 PT(CollisionEntry) CollisionHeightfield::
@@ -193,7 +198,6 @@ test_intersection_from_box(const CollisionEntry &entry) const {
     return nullptr;
   }
 }
-
 bool CollisionHeightfield::
 line_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
                     IntersectionParams &params) {
