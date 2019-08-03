@@ -462,44 +462,37 @@ get_triangles(int x, int y) const {
 
   Triangle t;
   int y2 = cols - 1 - y;
+  bool even = (x + y) % 2;
+  #define get_point(dx, dy) LPoint3(x + dx, y - dy, get_height(x + dx, y2 + dy));
+  t.p1 = get_point(0, 0);
   if (x - 1 >= 0 && y2 - 1 >= 0) {
-    t.p1 = LPoint3(x, y, get_height(x, y2));
-    t.p2 = LPoint3(x - 1, y + 1, get_height(x - 1, y2 - 1));
-    /* t.p2 = LPoint3(x, y + 1, get_height(x, y2 - 1)); */
-    t.p3 = LPoint3(x - 1, y, get_height(x - 1, y2));
+    t.p2 = get_point(-1, -1);
+    t.p3 = get_point(-1, 0);
     triangles.push_back(t);
-    t.p3 = LPoint3(x, y + 1, get_height(x, y2 - 1));
+    t.p3 = get_point(0, -1);
+    triangles.push_back(t);
   }
 
   if (x + 1 < rows && y2 + 1 < cols) {
-    t.p1 = LPoint3(x, y, get_height(x, y2));
-    t.p2 = LPoint3(x + 1, y - 1, get_height(x + 1, y2 + 1));
-    /* t.p2 = LPoint3(x, y - 1, get_height(x, y2 + 1)); */
-    /* t.p3 = LPoint3(x + 1, y, get_height(x + 1, y2)); */
-    t.p3 = LPoint3(x, y - 1, get_height(x, y2 + 1));
+    t.p2 = get_point(1, 1);
+    t.p3 = get_point(0, 1);
     triangles.push_back(t);
-    t.p3 = LPoint3(x + 1, y, get_height(x + 1, y2));
+    t.p3 = get_point(1, 0);
+    triangles.push_back(t);
   }
 
   if (x - 1 >= 0 && y2 + 1 < cols) {
-    t.p1 = LPoint3(x, y, get_height(x, y2));
-    /* t.p2 = LPoint3(x - 1, y - 1, get_height(x - 1, y2 + 1)); */
-    t.p2 = LPoint3(x, y - 1, get_height(x, y2 + 1));
-    t.p3 = LPoint3(x - 1, y, get_height(x - 1, y2));
+    t.p2 = get_point(0, 1);
+    t.p3 = get_point(-1, 0);
     triangles.push_back(t);
-    /* t.p3 = LPoint3(x, y - 1, get_height(x, y2 + 1)); */
-    /* triangles.push_back(t); */
   }
 
   if (x + 1 < rows && y2 - 1 >= 0) {
-    t.p1 = LPoint3(x, y, get_height(x, y2));
-    /* t.p2 = LPoint3(x + 1, y + 1, get_height(x + 1, y2 - 1)); */
-    t.p2 = LPoint3(x + 1, y, get_height(x + 1, y2));
-    t.p3 = LPoint3(x, y + 1, get_height(x, y2 - 1));
+    t.p2 = get_point(1, 0);
+    t.p3 = get_point(0, -1);
     triangles.push_back(t);
-    /* t.p3 = LPoint3(x + 1, y, get_height(x + 1, y2)); */
-    /* triangles.push_back(t); */
   }
+  #undef get_point
 
   return triangles;
 }
