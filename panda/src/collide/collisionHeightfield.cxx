@@ -462,35 +462,67 @@ get_triangles(int x, int y) const {
 
   Triangle t;
   int y2 = cols - 1 - y;
-  bool even = (x + y) % 2;
+  bool even = (x + y2) % 2;
   #define get_point(dx, dy) LPoint3(x + dx, y - dy, get_height(x + dx, y2 + dy));
   t.p1 = get_point(0, 0);
   if (x - 1 >= 0 && y2 - 1 >= 0) {
-    t.p2 = get_point(-1, -1);
-    t.p3 = get_point(-1, 0);
-    triangles.push_back(t);
-    t.p3 = get_point(0, -1);
-    triangles.push_back(t);
+    if (even) {
+      t.p2 = get_point(-1, -1);
+      t.p3 = get_point(-1, 0);
+      triangles.push_back(t);
+      t.p3 = get_point(0, -1);
+      triangles.push_back(t);
+    } else {
+      t.p2 = get_point(-1, 0);
+      t.p3 = get_point(0, -1);
+      triangles.push_back(t);
+    }
   }
 
   if (x + 1 < rows && y2 + 1 < cols) {
-    t.p2 = get_point(1, 1);
-    t.p3 = get_point(0, 1);
-    triangles.push_back(t);
-    t.p3 = get_point(1, 0);
-    triangles.push_back(t);
+    if (even) {
+      t.p2 = get_point(1, 1);
+      t.p3 = get_point(0, 1);
+      triangles.push_back(t);
+      t.p3 = get_point(1, 0);
+      triangles.push_back(t);
+    } else {
+      t.p2 = get_point(1, 0);
+      t.p3 = get_point(0, 1);
+      triangles.push_back(t);
+    }
   }
 
   if (x - 1 >= 0 && y2 + 1 < cols) {
-    t.p2 = get_point(0, 1);
-    t.p3 = get_point(-1, 0);
-    triangles.push_back(t);
+    if (even) {
+      t.p2 = get_point(-1, 1);
+      t.p3 = get_point(-1, 0);
+      triangles.push_back(t);
+      t.p3 = get_point(0, 1);
+      triangles.push_back(t);
+      /* t.p2 = get_point(0, 1); */
+      /* t.p3 = get_point(-1, 0); */
+    } else {
+      t.p2 = get_point(0, -1);
+      t.p3 = get_point(0, 1);
+      triangles.push_back(t);
+    }
   }
 
   if (x + 1 < rows && y2 - 1 >= 0) {
-    t.p2 = get_point(1, 0);
-    t.p3 = get_point(0, -1);
-    triangles.push_back(t);
+    if (even) {
+      t.p2 = get_point(1, -1);
+      t.p3 = get_point(0, -1);
+      triangles.push_back(t);
+      t.p3 = get_point(1, 0);
+      triangles.push_back(t);
+    /* t.p2 = get_point(1, 0); */
+    /* t.p3 = get_point(0, -1); */
+    } else {
+      t.p2 = get_point(0, -1);
+      t.p3 = get_point(1, 0);
+      triangles.push_back(t);
+    }
   }
   #undef get_point
 
