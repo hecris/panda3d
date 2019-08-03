@@ -132,26 +132,27 @@ test_intersection_from_sphere(const CollisionEntry &entry) const {
   PT(CollisionEntry) new_entry = new CollisionEntry(entry);
   LPoint3 point;
   bool intersected = false;
-  #define in_box(x, y, node) x >= node.area.min[0] && y >= node.area.min[1] && x <= node.area.max[0] && y <= node.area.max[1]
+  #define in_box(x, y, node) (x >= node.area.min[0] && y >= node.area.min[1] \
+                           && x <= node.area.max[0] && y <= node.area.max[1])
   for (unsigned i = 0; i < intersections.size(); i++) {
     QuadTreeNode node = _nodes[intersections[i].node_index];
-    for (int x = -radius; x <= radius; x++) {
-      for (int y = -radius; y <= radius; y++) {
-        if (x * x + y * y <= radius_2) {
-          LPoint2 p = {center[0] + x, center[1] + y};
-          if (in_box(p[0], p[1], node)) {
-            vector<Triangle> triangles = get_triangles(p[0], p[1]);
-            /* for (Triangle triangle : triangles) { */
-            /*   MSG("CollisionPolygon((" << triangle.p1 << "),(" */
-            /*       << triangle.p2 << "),(" */
-            /*       << triangle.p3 << "))"); */
-            /* } */
-            for (unsigned tri = 0; tri < triangles.size(); tri++) {
-              if (sphere_intersects_triangle(point, center, radius, triangles[tri])) {
-                intersected = true;
-                new_entry->set_surface_point(point);
-              }
-            }
+    for (int dx = -radius; dx <= radius; dx++) {
+      for (int dy = -radius; dy <= radius; dy++) {
+        int x = dx + center[0];
+        int y = dy + center[1];
+        if (!in_box(x, y, node)) continue;
+        if (dx * dx + dy * dy > radius_2) continue;
+
+        vector<Triangle> triangles = get_triangles(x, y);
+        /* for (Triangle triangle : triangles) { */
+        /*   MSG("CollisionPolygon((" << triangle.p1 << "),(" */
+        /*       << triangle.p2 << "),(" */
+        /*       << triangle.p3 << "))"); */
+        /* } */
+        for (unsigned tri = 0; tri < triangles.size(); tri++) {
+          if (sphere_intersects_triangle(point, center, radius, triangles[tri])) {
+            intersected = true;
+            new_entry->set_surface_point(point);
           }
         }
       }
