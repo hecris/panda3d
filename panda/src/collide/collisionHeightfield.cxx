@@ -137,6 +137,11 @@ test_intersection_from_sphere(const CollisionEntry &entry) const {
     for (int x = node.area.min[0]; x < node.area.max[0]; x++) {
       for (int y = node.area.min[1]; y < node.area.max[1]; y++) {
         vector<Triangle> triangles = get_triangles(x, y);
+        for (Triangle triangle : triangles) {
+          MSG("CollisionPolygon((" << triangle.p1 << "),("
+              << triangle.p2 << "),("
+              << triangle.p3 << "))");
+        }
         for (unsigned tri = 0; tri < triangles.size(); tri++) {
           if (sphere_intersects_triangle(point, center, radius, triangles[tri])) {
             intersected = true;
@@ -146,6 +151,7 @@ test_intersection_from_sphere(const CollisionEntry &entry) const {
       }
     }
   }
+  MSG("end");
   TIMER_STOP;
   if (intersected) {
     return new_entry;
@@ -458,34 +464,41 @@ get_triangles(int x, int y) const {
   int y2 = cols - 1 - y;
   if (x - 1 >= 0 && y2 - 1 >= 0) {
     t.p1 = LPoint3(x, y, get_height(x, y2));
-    t.p2 = LPoint3(x, y + 1, get_height(x, y2 - 1));
+    t.p2 = LPoint3(x - 1, y + 1, get_height(x - 1, y2 - 1));
+    /* t.p2 = LPoint3(x, y + 1, get_height(x, y2 - 1)); */
     t.p3 = LPoint3(x - 1, y, get_height(x - 1, y2));
     triangles.push_back(t);
+    t.p3 = LPoint3(x, y + 1, get_height(x, y2 - 1));
   }
 
   if (x + 1 < rows && y2 + 1 < cols) {
     t.p1 = LPoint3(x, y, get_height(x, y2));
-    t.p2 = LPoint3(x, y - 1, get_height(x, y2 + 1));
-    t.p3 = LPoint3(x + 1, y, get_height(x + 1, y2));
+    t.p2 = LPoint3(x + 1, y - 1, get_height(x + 1, y2 + 1));
+    /* t.p2 = LPoint3(x, y - 1, get_height(x, y2 + 1)); */
+    /* t.p3 = LPoint3(x + 1, y, get_height(x + 1, y2)); */
+    t.p3 = LPoint3(x, y - 1, get_height(x, y2 + 1));
     triangles.push_back(t);
+    t.p3 = LPoint3(x + 1, y, get_height(x + 1, y2));
   }
 
   if (x - 1 >= 0 && y2 + 1 < cols) {
     t.p1 = LPoint3(x, y, get_height(x, y2));
-    t.p2 = LPoint3(x - 1, y - 1, get_height(x - 1, y2 + 1));
+    /* t.p2 = LPoint3(x - 1, y - 1, get_height(x - 1, y2 + 1)); */
+    t.p2 = LPoint3(x, y - 1, get_height(x, y2 + 1));
     t.p3 = LPoint3(x - 1, y, get_height(x - 1, y2));
     triangles.push_back(t);
-    t.p3 = LPoint3(x, y - 1, get_height(x, y2 + 1));
-    triangles.push_back(t);
+    /* t.p3 = LPoint3(x, y - 1, get_height(x, y2 + 1)); */
+    /* triangles.push_back(t); */
   }
 
   if (x + 1 < rows && y2 - 1 >= 0) {
     t.p1 = LPoint3(x, y, get_height(x, y2));
-    t.p2 = LPoint3(x + 1, y + 1, get_height(x + 1, y2 - 1));
+    /* t.p2 = LPoint3(x + 1, y + 1, get_height(x + 1, y2 - 1)); */
+    t.p2 = LPoint3(x + 1, y, get_height(x + 1, y2));
     t.p3 = LPoint3(x, y + 1, get_height(x, y2 - 1));
     triangles.push_back(t);
-    t.p3 = LPoint3(x + 1, y, get_height(x + 1, y2));
-    triangles.push_back(t);
+    /* t.p3 = LPoint3(x + 1, y, get_height(x + 1, y2)); */
+    /* triangles.push_back(t); */
   }
 
   return triangles;
