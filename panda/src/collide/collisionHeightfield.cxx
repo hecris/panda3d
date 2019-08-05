@@ -59,9 +59,7 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
   vector<QuadTreeIntersection> intersections;
   intersections = find_intersections(line_intersects_box, params);
 
-  if (intersections.size() == 0) {
-    return nullptr;
-  }
+  if (intersections.size() == 0) return nullptr;
   std::sort(intersections.begin(), intersections.end());
 
   PT(CollisionEntry) new_entry = new CollisionEntry(entry);
@@ -108,7 +106,6 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
 
 PT(CollisionEntry) CollisionHeightfield::
 test_intersection_from_sphere(const CollisionEntry &entry) const {
-  TIMER_START;
   const CollisionSphere *sphere;
   DCAST_INTO_R(sphere, entry.get_from(), nullptr);
 
@@ -128,40 +125,56 @@ test_intersection_from_sphere(const CollisionEntry &entry) const {
   intersections= find_intersections(sphere_intersects_box, params);
 
   if (intersections.size() == 0) return nullptr;
+  std::sort(intersections.begin(), intersections.end());
 
-  PT(CollisionEntry) new_entry = new CollisionEntry(entry);
   LPoint3 point;
   bool intersected = false;
   #define in_box(x, y, node) (x >= node.area.min[0] && y >= node.area.min[1] \
                            && x <= node.area.max[0] && y <= node.area.max[1])
   for (unsigned i = 0; i < intersections.size(); i++) {
     QuadTreeNode node = _nodes[intersections[i].node_index];
-    for (int dx = -radius; dx <= radius; dx++) {
-      for (int dy = -radius; dy <= radius; dy++) {
-        int x = dx + center[0];
-        int y = dy + center[1];
-        if (!in_box(x, y, node)) continue;
-        if (dx * dx + dy * dy > radius_2) continue;
-
-        vector<Triangle> triangles = get_triangles(x, y);
-        /* for (Triangle triangle : triangles) { */
-        /*   MSG("CollisionPolygon((" << triangle.p1 << "),(" */
-        /*       << triangle.p2 << "),(" */
-        /*       << triangle.p3 << "))"); */
-        /* } */
-        for (unsigned tri = 0; tri < triangles.size(); tri++) {
-          if (sphere_intersects_triangle(point, center, radius, triangles[tri])) {
-            intersected = true;
-            new_entry->set_surface_point(point);
+    for (int r = 0; r <= radius; r++) {
+      int x = center[0] - r;
+      int y = center[1] - r;
+      int dx = 1;
+      int dy = 0;
+      for (int side = 0; side < 4; side++) {
+        int max_j = (r == 0 ? 2 : 2 * r);
+        for (int j = 1; j < max_j; j++) {
+          if (in_box(x, y, node)) {
+            vector<Triangle> triangles = get_triangles(x, y);
+            /* for (Triangle tri : triangles) { MSG("CollisionPolygon((" << tri.p1 << "),(" << tri.p2 << "),(" << tri.p3 << "))"); } */
+            for (Triangle tri : triangles) {
+              if (sphere_intersects_triangle(point, center, radius, tri)) {
+                intersected = true;
+                goto exitloop;
+              }
+            }
           }
+          x += dx;
+          y += dy;
         }
+        if (r == 0) break;
+        int t = dx;
+        dx = -dy;
+        dy = t;
       }
     }
   }
+exitloop:
   #undef in_box
-  TIMER_STOP;
-  MSG("end");
   if (intersected) {
+    PT(CollisionEntry) new_entry = new CollisionEntry(entry);
+    LVector3 normal;
+    LVector3 v(center - point);
+    PN_stdfloat vec_length = v.length();
+    if (IS_NEARLY_ZERO(vec_length)) {
+      normal.set(1, 0, 0);
+    } else {
+      normal = v / vec_length;
+    }
+    new_entry->set_surface_point(point);
+    new_entry->set_surface_normal(normal);
     return new_entry;
   } else {
     return nullptr;
@@ -279,7 +292,10 @@ sphere_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
   LPoint3 center = params.center;
   double radius = params.radius;
   LPoint3 p = center.fmin(box_max).fmax(box_min);
-  return (center - p).length_squared() <= radius * radius;
+  double dist = (center - p).length_squared();
+  params.t1 = dist;
+  return dist <= radius * radius;
+  /* return (center - p).length_squared() <= radius * radius; */
 }
 
 bool CollisionHeightfield::
