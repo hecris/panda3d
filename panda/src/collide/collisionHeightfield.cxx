@@ -23,7 +23,13 @@
 #include "bamWriter.h"
 #include <queue>
 #include <algorithm>
+// Utilities to time collision tests, will be removed
 #define MSG(s) collide_cat.error() << s << '\n';
+#include <chrono>
+using namespace std::chrono;
+#define TIMER_START auto start = high_resolution_clock::now();
+#define TIMER_STOP auto stop = high_resolution_clock::now(); auto duration = duration_cast<microseconds>(stop - start);  MSG(duration.count());
+#define PRT_TRIS for (Triangle triangle : triangles) { MSG("CollisionPolygon((" << triangle.p1 << "),(" << triangle.p2 << "),(" << triangle.p3 << "))"); }
 
 using std::min;
 using std::max;
@@ -103,6 +109,7 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
 
 PT(CollisionEntry) CollisionHeightfield::
 test_intersection_from_sphere(const CollisionEntry &entry) const {
+  TIMER_START;
   const CollisionSphere *sphere;
   DCAST_INTO_R(sphere, entry.get_from(), nullptr);
 
@@ -123,30 +130,56 @@ test_intersection_from_sphere(const CollisionEntry &entry) const {
 
   if (intersections.size() == 0) return nullptr;
 
-  PT(CollisionEntry) new_entry = new CollisionEntry(entry);
   LPoint3 point;
+  LPoint3 closest_point;
+  PN_stdfloat dist;
+  PN_stdfloat dist_min = FLT_MAX;
+
   bool intersected = false;
+  #define in_box(x, y, node) (x >= node.area.min[0] && y >= node.area.min[1] \
+                           && x <= node.area.max[0] && y <= node.area.max[1])
   for (unsigned i = 0; i < intersections.size(); i++) {
     QuadTreeNode node = _nodes[intersections[i].node_index];
-    for (int x = node.area.min[0]; x < node.area.max[0]; x++) {
-      for (int y = node.area.min[0]; y < node.area.max[1]; y++) {
+    for (int dx = -radius; dx <= radius; dx++) {
+      for (int dy = -radius; dy <= radius; dy++) {
+        int x = dx + center[0];
+        int y = dy + center[1];
+        if (!in_box(x, y, node)) continue;
+        if (dx * dx + dy * dy > radius_2) continue;
+
         vector<Triangle> triangles = get_triangles(x, y);
-        for (unsigned tri = 0; tri < triangles.size(); tri++) {
-          if (sphere_intersects_triangle(point, center, radius, triangles[tri])) {
+        for (Triangle tri : triangles) {
+          point = closest_point_on_triangle(center, tri);
+          dist = (point - center).length_squared();
+          if (dist > radius_2) continue;
+          if (dist < dist_min) {
             intersected = true;
-            new_entry->set_surface_point(point);
+            dist_min = dist;
+            closest_point = point;
           }
         }
       }
     }
   }
-
+  #undef in_box
+  TIMER_STOP;
+  MSG("end");
   if (intersected) {
+    PT(CollisionEntry) new_entry = new CollisionEntry(entry);
+    LVector3 v(center - closest_point);
+    PN_stdfloat v_length = v.length();
+    if (IS_NEARLY_ZERO(v_length)) {
+      v.set(1, 0, 0);
+    } else {
+      v /= v_length;
+    }
+    new_entry->set_surface_point(closest_point);
+    new_entry->set_surface_normal(v);
+    new_entry->set_interior_point(center - radius * v);
     return new_entry;
   } else {
     return nullptr;
   }
-
 }
 
 PT(CollisionEntry) CollisionHeightfield::
@@ -175,7 +208,7 @@ test_intersection_from_box(const CollisionEntry &entry) const {
   for (unsigned i = 0; i < intersections.size(); i++) {
     QuadTreeNode node = _nodes[intersections[i].node_index];
     for (int x = node.area.min[0]; x < node.area.max[0]; x++) {
-      for (int y = node.area.min[0]; y < node.area.max[1]; y++) {
+      for (int y = node.area.min[1]; y < node.area.max[1]; y++) {
         vector<Triangle> triangles = get_triangles(x, y);
         for (unsigned tri = 0; tri < triangles.size(); tri++) {
           if (box_intersects_triangle(box_min, box_max, triangles[tri])) {
@@ -452,37 +485,65 @@ get_triangles(int x, int y) const {
 
   Triangle t;
   int y2 = cols - 1 - y;
+  bool odd = (x + y2) % 2;
+  #define get_point(dx, dy) LPoint3(x + dx, y - dy, get_height(x + dx, y2 + dy));
+  t.p1 = get_point(0, 0);
   if (x - 1 >= 0 && y2 - 1 >= 0) {
-    t.p1 = LPoint3(x, y, get_height(x, y2));
-    t.p2 = LPoint3(x, y - 1, get_height(x, y2 - 1));
-    t.p3 = LPoint3(x -1, y, get_height(x-1, y2));
-    triangles.push_back(t);
+    if (odd) {
+      t.p2 = get_point(-1, 0);
+      t.p3 = get_point(0, -1);
+      triangles.push_back(t);
+    } else {
+      t.p2 = get_point(-1, -1);
+      t.p3 = get_point(-1, 0);
+      triangles.push_back(t);
+      t.p3 = get_point(0, -1);
+      triangles.push_back(t);
+    }
   }
 
   if (x + 1 < rows && y2 + 1 < cols) {
-    t.p1 = LPoint3(x, y, get_height(x, y2));
-    t.p2 = LPoint3(x, y+1, get_height(x, y2 + 1));
-    t.p3 = LPoint3(x+1, y, get_height(x + 1, y2));
-    triangles.push_back(t);
+    if (odd) {
+      t.p2 = get_point(1, 0);
+      t.p3 = get_point(0, 1);
+      triangles.push_back(t);
+    } else {
+      t.p2 = get_point(1, 1);
+      t.p3 = get_point(0, 1);
+      triangles.push_back(t);
+      t.p3 = get_point(1, 0);
+      triangles.push_back(t);
+    }
   }
 
   if (x - 1 >= 0 && y2 + 1 < cols) {
-    t.p1 = LPoint3(x, y, get_height(x, y2));
-    t.p2 = LPoint3(x-1, y+1, get_height(x-1, y2 + 1));
-    t.p3 = LPoint3(x-1, y, get_height(x-1, y2));
-    triangles.push_back(t);
-    t.p3 = LPoint3(x, y+1, get_height(x, y2+1));
-    triangles.push_back(t);
+    if (odd) {
+      t.p2 = get_point(0, -1);
+      t.p3 = get_point(0, 1);
+      triangles.push_back(t);
+    } else {
+      t.p2 = get_point(-1, 1);
+      t.p3 = get_point(-1, 0);
+      triangles.push_back(t);
+      t.p3 = get_point(0, 1);
+      triangles.push_back(t);
+    }
   }
 
   if (x + 1 < rows && y2 - 1 >= 0) {
-    t.p1 = LPoint3(x, y, get_height(x, y2));
-    t.p2 = LPoint3(x+1, y-1, get_height(x+1, y2-1));
-    t.p3 = LPoint3(x, y-1, get_height(x, y2-1));
-    triangles.push_back(t);
-    t.p3 = LPoint3(x+1, y, get_height(x+1, y2));
-    triangles.push_back(t);
+    if (odd) {
+      t.p2 = get_point(0, -1);
+      t.p3 = get_point(1, 0);
+      triangles.push_back(t);
+    } else {
+      t.p2 = get_point(1, -1);
+      t.p3 = get_point(0, -1);
+      triangles.push_back(t);
+      t.p3 = get_point(1, 0);
+      triangles.push_back(t);
+    }
   }
+  #undef get_point
 
   return triangles;
 }
