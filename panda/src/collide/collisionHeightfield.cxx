@@ -74,23 +74,32 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
 
     LPoint3 p1 = from_origin + from_direction * intersections[i].tmin;
     LPoint3 p2 = from_origin + from_direction * intersections[i].tmax;
+    if (p1[0] > p2[0]) {
+      LPoint3 temp = p1;
+      p1 = p2;
+      p2 = temp;
+    }
     // We use Bresenhaum's Line Algorithm to directly get the heightfield
     // coordinates that the line passes through.
-    int m_new = 2 * (p2[1] - p1[1]);
-    int slope_error_new = m_new - (p2[0] - p1[0]);
+    int m_new = cabs(2 * (p2[1] - p1[1]));
+    int slope_error_new = cabs(m_new - (p2[0] - p1[0]));
 
     for (int x = p1[0], y = p1[1]; x <= p2[0]; x++) {
       vector<Triangle> triangles = get_triangles(x, y);
 
-      for (unsigned tri = 0; tri < triangles.size(); tri++) {
+      for (Triangle tri : triangles) {
         double min_t = DBL_MAX;
         double t;
-        if (line_intersects_triangle(t, from_origin, from_direction, triangles[tri])) {
+        if (line_intersects_triangle(t, from_origin, from_direction, tri)) {
           if (t < 0) continue;
           if (t < min_t) {
             intersected = true;
             min_t = t;
             new_entry->set_surface_point(from_origin + from_direction * t);
+            LPlane p = LPlane(tri.p1, tri.p2, tri.p3);
+            LVector3 normal = p.get_normal();
+            if (p.dist_to_plane(from_origin) < 0.0f) normal *= -1;
+            new_entry->set_surface_normal(normal);
           }
         }
       }
@@ -98,7 +107,11 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
 
       slope_error_new += m_new;
       if (slope_error_new >= 0) {
-        y++;
+        if (p1[1] < p2[2]) {
+          y++;
+        } else {
+          y--;
+        }
         slope_error_new -= 2 * (p2[0] - p1[0]);
       }
     }
