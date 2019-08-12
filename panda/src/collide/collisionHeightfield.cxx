@@ -197,6 +197,7 @@ test_intersection_from_sphere(const CollisionEntry &entry) const {
 
 PT(CollisionEntry) CollisionHeightfield::
 test_intersection_from_box(const CollisionEntry &entry) const {
+  TIMER_START;
   const CollisionBox *box;
   DCAST_INTO_R(box, entry.get_from(), nullptr);
 
@@ -215,25 +216,49 @@ test_intersection_from_box(const CollisionEntry &entry) const {
     return nullptr;
   }
 
-  PT(CollisionEntry) new_entry = new CollisionEntry(entry);
-  LPoint3 point;
   bool intersected = false;
+  Triangle intersected_tri;
   for (unsigned i = 0; i < intersections.size(); i++) {
     QuadTreeNode node = _nodes[intersections[i].node_index];
-    for (int x = node.area.min[0]; x < node.area.max[0]; x++) {
-      for (int y = node.area.min[1]; y < node.area.max[1]; y++) {
+    LVecBase2 overlap_min = LVecBase2(max(box_min[0], node.area.min[0]), max(box_min[1], node.area.min[1]));
+    LVecBase2 overlap_max = LVecBase2(min(box_max[0], node.area.max[0]), min(box_max[1], node.area.max[1]));
+    for (int x = overlap_min[0]; x < overlap_max[0]; x++) {
+      for (int y = overlap_min[1]; y < overlap_max[1]; y++) {
         vector<Triangle> triangles = get_triangles(x, y);
-        for (unsigned tri = 0; tri < triangles.size(); tri++) {
-          if (box_intersects_triangle(box_min, box_max, triangles[tri])) {
+        for (Triangle tri : triangles) {
+          if (box_intersects_triangle(box_min, box_max, tri)) {
             intersected = true;
-            new_entry->set_surface_point(box_min);
+            intersected_tri = tri;
           }
         }
       }
     }
   }
+  TIMER_STOP;
+  MSG("end");
 
   if (intersected) {
+    PT(CollisionEntry) new_entry = new CollisionEntry(entry);
+    LPlane p = LPlane(intersected_tri.p1, intersected_tri.p2, intersected_tri.p3);
+    LVector3 normal = p.get_normal();
+    if (p.dist_to_plane(box->get_center() * wrt_mat) < 0.0f) {
+      normal *= -1;
+      p.flip();
+    }
+    new_entry->set_surface_normal(normal);
+    PN_stdfloat min_dist = 0;
+    LPoint3 interior_point;
+    for (int i = 0; i < 8; i++) {
+      LPoint3 vertex = box->get_point(i) * wrt_mat;
+      PN_stdfloat dist = p.dist_to_plane(vertex);
+      if (dist <= min_dist) {
+        min_dist = dist;
+        interior_point = vertex;
+      }
+    }
+    new_entry->set_interior_point(interior_point);
+    new_entry->set_surface_point(
+        closest_point_on_triangle(interior_point, intersected_tri));
     return new_entry;
   } else {
     return nullptr;
