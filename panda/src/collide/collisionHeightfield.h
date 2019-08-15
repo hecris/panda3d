@@ -7,6 +7,13 @@
 
 using std::vector;
 
+/*
+ * CollisionHeightfield efficiently deals with collisions on uneven
+ * terrain given a heightfield image. A quad tree is implemented to
+ * significantly reduce the amount of triangles tested. Each quad
+ * tree node represents a sub-rectangle of the heightfield image
+ * and thus a box in 3D space.
+ * */
 class EXPCL_PANDA_COLLIDE CollisionHeightfield : public CollisionSolid {
 PUBLISHED:
   CollisionHeightfield(PNMImage &heightfield,
@@ -88,10 +95,6 @@ protected:
 
   static bool sphere_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
                                     IntersectionParams &params);
-
-  static bool sphere_intersects_triangle(LPoint3 &intersection_point,
-                                  const LPoint3 &center, double radius,
-                                  const Triangle &triangle);
 
   static bool box_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
                                  IntersectionParams &params);

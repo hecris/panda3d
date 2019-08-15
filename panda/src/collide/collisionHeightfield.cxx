@@ -62,6 +62,8 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
   if (intersections.size() == 0) {
     return nullptr;
   }
+  // Sort intersections by their t1 values so we can return
+  // the first intersection found.
   sort(intersections.begin(), intersections.end());
 
   double t1, t2;
@@ -98,7 +100,8 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
           }
         }
       }
-
+      // If the ray intersects this heightfield element, we can
+      // stop here and return the intersection.
       if (intersected) {
         PT(CollisionEntry) new_entry = new CollisionEntry(entry);
         new_entry->set_surface_point(from_origin + from_direction * min_t);
@@ -108,14 +111,13 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
         new_entry->set_surface_normal(normal);
         return new_entry;
       }
-
+      // Otherwise, go to the next heightfield element
       deltaerr += err;
       if (deltaerr >= 0) {
         if (y_increasing) y++;
         else y--;
         deltaerr -= 2 * (p2[0] - p1[0]);
       }
-
       if (x_increasing) x++;
       else x--;
     }
@@ -159,6 +161,8 @@ test_intersection_from_sphere(const CollisionEntry &entry) const {
                            && x <= node.area.max[0] && y <= node.area.max[1])
   for (unsigned i = 0; i < intersections.size(); i++) {
     QuadTreeNode node = _nodes[intersections[i].node_index];
+    // Iterate through the circle's area and find triangle intersections,
+    // find the one closest to the center of the sphere.
     for (int dx = -radius; dx <= radius; dx++) {
       for (int dy = -radius; dy <= radius; dy++) {
         int x = dx + center[0];
@@ -226,8 +230,12 @@ test_intersection_from_box(const CollisionEntry &entry) const {
   Triangle intersected_tri;
   for (unsigned i = 0; i < intersections.size(); i++) {
     QuadTreeNode node = _nodes[intersections[i].node_index];
-    LVecBase2 overlap_min = LVecBase2(max(box_min[0], node.area.min[0]), max(box_min[1], node.area.min[1]));
-    LVecBase2 overlap_max = LVecBase2(min(box_max[0], node.area.max[0]), min(box_max[1], node.area.max[1]));
+    // Find the overlapping rectangle between the two boxes and
+    // test the heightfield elements in that area.
+    LVecBase2 overlap_min = LVecBase2(max(box_min[0], node.area.min[0]),
+                                      max(box_min[1], node.area.min[1]));
+    LVecBase2 overlap_max = LVecBase2(min(box_max[0], node.area.max[0]),
+                                      min(box_max[1], node.area.max[1]));
     for (int x = overlap_min[0]; x < overlap_max[0]; x++) {
       for (int y = overlap_min[1]; y < overlap_max[1]; y++) {
         vector<Triangle> triangles = get_triangles(x, y);
@@ -252,6 +260,7 @@ test_intersection_from_box(const CollisionEntry &entry) const {
     new_entry->set_surface_normal(normal);
     PN_stdfloat min_dist = 0;
     LPoint3 interior_point;
+    // Find the deepest vertex and set it as the interior point
     for (int i = 0; i < 8; i++) {
       LPoint3 vertex = box->get_point(i) * wrt_mat;
       PN_stdfloat dist = p.dist_to_plane(vertex);
@@ -310,6 +319,7 @@ bool CollisionHeightfield::
 line_intersects_triangle(double &t, const LPoint3 &from,
                          const LPoint3 &delta,
                          const Triangle &triangle) {
+  // Implementation of Möller-Trumbore algorithm
   const PN_stdfloat EPSILON = 1.0e-7;
   PN_stdfloat a,f,u,v;
   LVector3 edge1, edge2, h, s, q;
@@ -352,20 +362,10 @@ sphere_intersects_box(const LPoint3 &box_min, const LPoint3 &box_max,
  *
  */
 bool CollisionHeightfield::
-sphere_intersects_triangle(LPoint3 &intersection_point,
-                           const LPoint3 &center, double radius,
-                           const Triangle &triangle) {
-  intersection_point = closest_point_on_triangle(center, triangle);
-  return (intersection_point - center).length_squared() <= radius * radius;
-}
-
-/**
- *
- */
-bool CollisionHeightfield::
 box_intersects_triangle(const LPoint3 &box_min, const LPoint3 &box_max,
                         const Triangle &triangle) {
   // Using the Seperating Axis Theorem, we have a maximum of 13 SAT tests
+  // Refer to Christer Ericson's Collision Detection book for full explanation
   LPoint3 v0 = triangle.p1, v1 = triangle.p2, v2 = triangle.p3;
 
   PN_stdfloat p0, p1, p2, r;
@@ -538,15 +538,15 @@ find_intersections(BoxIntersection intersects_box, IntersectionParams params) co
 }
 
 /**
- * Given a coordinate on the heightfield, return the triangles that
- * are defined at this point in 3D space.
+ * Return the triangles that are defined at the
+ * given 2D coordinate.
  */
 vector<CollisionHeightfield::Triangle> CollisionHeightfield::
 get_triangles(int x, int y) const {
   int rows = _heightfield.get_read_x_size();
   int cols = _heightfield.get_read_y_size();
   vector<Triangle> triangles;
-  if (x < 0 || y < 0 || x >= rows - 1 || y >= cols - 1)
+  if (x < 0 || y < 0 || x >= rows || y >= cols)
     return triangles;
 
   Triangle t;
@@ -584,7 +584,7 @@ get_triangles(int x, int y) const {
 
   if (x - 1 >= 0 && y2 + 1 < cols) {
     if (odd) {
-      t.p2 = get_point(0, -1);
+      t.p2 = get_point(0, 1);
       t.p3 = get_point(0, 1);
       triangles.push_back(t);
     } else {
@@ -615,7 +615,11 @@ get_triangles(int x, int y) const {
 }
 
 /**
- *
+ * Processes the given heightfield image and creates a
+ * quad tree where each node represents a smaller
+ * sub-rectangle of the heightfield. Each quad tree node
+ * has a height_min and height_max value, thus representing
+ * a box in 3D space.
  */
 void CollisionHeightfield::
 setup_quadtree(int subdivisions) {
@@ -652,6 +656,9 @@ setup_quadtree(int subdivisions) {
     nodes[i + 3].index = i + 3;
   }
 
+  // We now process the heightfield image, setting the
+  // height_min and height_max values of each quad tree node
+  // starting from the leaves.
   int leaf_first_index = 0;
   for (int i = 1; i <= subdivisions - 1; i++) {
     leaf_first_index += pow(4, i);
@@ -689,7 +696,7 @@ setup_quadtree(int subdivisions) {
 }
 
 /**
- * Generic member functions
+ * Generic CollisionSolid member functions
  */
 void CollisionHeightfield::
 fill_viz_geom() {
