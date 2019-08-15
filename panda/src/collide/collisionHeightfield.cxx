@@ -64,55 +64,60 @@ test_intersection_from_ray(const CollisionEntry &entry) const {
   }
   sort(intersections.begin(), intersections.end());
 
-  PT(CollisionEntry) new_entry = new CollisionEntry(entry);
-  bool intersected = false;
+  double t1, t2;
   for (unsigned i = 0; i < intersections.size(); i++) {
+    t1 = intersections[i].tmin;
+    t2 = intersections[i].tmax;
 
-    if (intersections[i].tmin < 0.0 && intersections[i].tmax < 0.0) continue;
-    if (intersections[i].tmin < 0.0) intersections[i].tmin = intersections[i].tmax;
+    if (t1 < 0.0 && t2 < 0.0) continue;
+    t1 = max(t1, 0.0);
 
-    LPoint3 p1 = from_origin + from_direction * intersections[i].tmin;
-    LPoint3 p2 = from_origin + from_direction * intersections[i].tmax;
-    if (p1[0] > p2[0]) {
-      LPoint3 temp = p1;
-      p1 = p2;
-      p2 = temp;
-    }
+    LPoint3 p1 = from_origin + from_direction * t1;
+    LPoint3 p2 = from_origin + from_direction * t2;
     // We use Bresenhaum's Line Algorithm to directly get the heightfield
     // coordinates that the line passes through.
-    int m_new = cabs(2 * (p2[1] - p1[1]));
-    int slope_error_new = cabs(m_new - (p2[0] - p1[0]));
+    int err = cabs(2 * (p2[1] - p1[1]));
+    int deltaerr = cabs(err - (p2[0] - p1[0]));
 
-    for (int x = p1[0], y = p1[1]; x <= p2[0]; x++) {
+    int x = p1[0], y = p1[1];
+    bool x_increasing = x < p2[0];
+    bool y_increasing = y < p2[1];
+    while ((x_increasing && x <= p2[0]) || (!x_increasing && x >= p2[0])) {
+      bool intersected = false;
+      Triangle int_tri;
       vector<Triangle> triangles = get_triangles(x, y);
-
+      double min_t = DBL_MAX;
       for (Triangle tri : triangles) {
-        double min_t = DBL_MAX;
         double t;
         if (line_intersects_triangle(t, from_origin, from_direction, tri)) {
           if (t < 0) continue;
           if (t < min_t) {
             intersected = true;
             min_t = t;
-            new_entry->set_surface_point(from_origin + from_direction * t);
-            LPlane p = LPlane(tri.p1, tri.p2, tri.p3);
-            LVector3 normal = p.get_normal();
-            if (p.dist_to_plane(from_origin) < 0.0f) normal *= -1;
-            new_entry->set_surface_normal(normal);
+            int_tri = tri;
           }
         }
       }
-      if (intersected) return new_entry;
 
-      slope_error_new += m_new;
-      if (slope_error_new >= 0) {
-        if (p1[1] < p2[2]) {
-          y++;
-        } else {
-          y--;
-        }
-        slope_error_new -= 2 * (p2[0] - p1[0]);
+      if (intersected) {
+        PT(CollisionEntry) new_entry = new CollisionEntry(entry);
+        new_entry->set_surface_point(from_origin + from_direction * min_t);
+        LPlane p = LPlane(int_tri.p1, int_tri.p2, int_tri.p3);
+        LVector3 normal = p.get_normal();
+        if (p.dist_to_plane(from_origin) < 0.0f) normal *= -1;
+        new_entry->set_surface_normal(normal);
+        return new_entry;
       }
+
+      deltaerr += err;
+      if (deltaerr >= 0) {
+        if (y_increasing) y++;
+        else y--;
+        deltaerr -= 2 * (p2[0] - p1[0]);
+      }
+
+      if (x_increasing) x++;
+      else x--;
     }
   }
 
