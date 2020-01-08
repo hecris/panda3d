@@ -15,6 +15,7 @@
 #include "pbitops.cxx"
 #include "pointerData.cxx"
 #include "pta_ushort.cxx"
+#include "quadTree.cxx"
 #include "simpleHashMap.cxx"
 #include "sparseArray.cxx"
 #include "timedCycle.cxx"

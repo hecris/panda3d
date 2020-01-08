@@ -17,6 +17,7 @@
 #include "pandabase.h"
 #include "collisionSolid.h"
 #include "pnmImage.h"
+#include "quadTree.h"
 
 /*
  * CollisionHeightfield efficiently deals with collisions on uneven
@@ -25,13 +26,40 @@
  * tree node represents a sub-rectangle of the heightfield image
  * and thus a box in 3D space.
  * */
+
+class HeightfieldQuad : public QuadTreeNode {
+  public:
+    INLINE HeightfieldQuad(LVecBase2 min, LVecBase2 max);
+
+    INLINE virtual void make_children(QuadTreeNode* &child1,
+                                      QuadTreeNode* &child2,
+                                      QuadTreeNode* &child3,
+                                      QuadTreeNode* &child4) override;
+
+    INLINE PN_stdfloat get_min_height();
+    INLINE void set_min_height(PN_stdfloat height_min);
+
+    INLINE PN_stdfloat get_max_height();
+    INLINE void set_max_height(PN_stdfloat height_max);
+
+
+  private:
+    LVecBase2 _min;
+    LVecBase2 _max;
+    PN_stdfloat _height_min;
+    PN_stdfloat _height_max;
+};
+
 class EXPCL_PANDA_COLLIDE CollisionHeightfield : public CollisionSolid {
 PUBLISHED:
+  CollisionHeightfield(PNMImage heightfield, PN_stdfloat max_height);
+
   virtual LPoint3 get_collision_origin() const;
 
 private:
   PNMImage _heightfield;
   PN_stdfloat _max_height;
+  QuadTree* _quadtree;
 
 protected:
   virtual PT(CollisionEntry)

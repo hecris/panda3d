@@ -37,6 +37,7 @@ class QuadTree {
     QuadTree(QuadTreeNode* root);
     ~QuadTree();
     bool subdivide();
+    bool subdivide(std::size_t n);
     std::size_t get_size() const;
     void search(SearchStrategy &strategy);
 

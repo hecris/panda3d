@@ -37,6 +37,22 @@ TypeHandle CollisionHeightfield::_type_handle;
 /**
  *
  */
+CollisionHeightfield::
+CollisionHeightfield(PNMImage heightfield, PN_stdfloat max_height):
+_heightfield(heightfield),
+_max_height(max_height)
+{
+  unsigned int x = heightfield.get_x_size();
+  unsigned int y = heightfield.get_y_size();
+
+  HeightfieldQuad* root = new HeightfieldQuad(LVecBase2(0, 0),
+                                              LVecBase2(x, y));
+  QuadTree* tree = new QuadTree(root);
+}
+
+/**
+ *
+ */
 PT(CollisionEntry) CollisionHeightfield::
 test_intersection_from_ray(const CollisionEntry &entry) const {
   return nullptr;
