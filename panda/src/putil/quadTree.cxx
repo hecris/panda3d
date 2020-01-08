@@ -36,6 +36,19 @@ subdivide() {
 	return true;
 }
 
+/**
+ *
+ */
+bool QuadTree::
+subdivide(size_t n) {
+	for (int i = 0; i < n; i++) {
+		if (!subdivide()) {
+			return false;
+		}
+	}
+	return true;
+}
+
 
 /**
  *
