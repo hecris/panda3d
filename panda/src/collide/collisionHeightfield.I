@@ -11,6 +11,8 @@
  * @date 2019-07-01
  */
 
+#include <cmath>
+
 /**
  *
  */
@@ -37,7 +39,7 @@ make_children(QuadTreeNode* &child1, QuadTreeNode* &child2,
  *
  */
 INLINE PN_stdfloat HeightfieldQuad::
-get_min_height() {
+get_min_height() const {
   return _height_min;
 }
 
@@ -53,8 +55,33 @@ set_min_height(PN_stdfloat height_min) {
  *
  */
 INLINE PN_stdfloat HeightfieldQuad::
-get_max_height() {
+get_max_height() const {
   return _height_max;
+}
+
+/**
+ *
+ */
+INLINE const LVecBase2& HeightfieldQuad::
+get_min() const {
+  return _min;
+}
+
+/**
+ *
+ */
+INLINE const LVecBase2& HeightfieldQuad::
+get_max() const {
+  return _max;
+}
+
+/**
+ *
+ */
+INLINE PN_stdfloat HeightfieldQuad::
+get_area() const {
+  return std::abs(_min[0] - _max[0]) *
+         std::abs(_min[1] - _max[1]);
 }
 
 /**

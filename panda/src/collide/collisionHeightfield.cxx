@@ -47,7 +47,18 @@ _max_height(max_height)
 
   HeightfieldQuad* root = new HeightfieldQuad(LVecBase2(0, 0),
                                               LVecBase2(x, y));
-  QuadTree* tree = new QuadTree(root);
+  _quadtree = new QuadTree(root);
+  _quadtree->subdivide(3);
+}
+
+
+/**
+ *
+ */
+CollisionHeightfield::
+~CollisionHeightfield() {
+    delete _quadtree;
+    _quadtree = nullptr;
 }
 
 /**
@@ -93,7 +104,11 @@ get_collision_origin() const {
 
 PT(BoundingVolume) CollisionHeightfield::
 compute_internal_bounds() const {
-  return nullptr;
+  LPoint2 min = {0, 0, 0};
+  LPoint2 max = {_heightfield.get_x_size(),
+                 _heightfield.get_y_size(), max_height};
+
+  return new BoundingBox();
 }
 
 PStatCollector &CollisionHeightfield::

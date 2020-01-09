@@ -36,12 +36,15 @@ class HeightfieldQuad : public QuadTreeNode {
                                       QuadTreeNode* &child3,
                                       QuadTreeNode* &child4) override;
 
-    INLINE PN_stdfloat get_min_height();
+    INLINE PN_stdfloat get_min_height() const;
     INLINE void set_min_height(PN_stdfloat height_min);
 
-    INLINE PN_stdfloat get_max_height();
+    INLINE PN_stdfloat get_max_height() const;
     INLINE void set_max_height(PN_stdfloat height_max);
 
+    INLINE const LVecBase2& get_min() const;
+    INLINE const LVecBase2& get_max() const;
+    INLINE PN_stdfloat get_area() const;
 
   private:
     LVecBase2 _min;
@@ -79,6 +82,8 @@ public:
   virtual PStatCollector &get_test_pcollector();
 
   INLINE static void flush_level();
+
+  ~CollisionHeightfield();
 
 protected:
   // TODO
