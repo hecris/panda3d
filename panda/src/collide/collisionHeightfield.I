@@ -28,11 +28,14 @@ INLINE void HeightfieldQuad::
 make_children(QuadTreeNode* &child1, QuadTreeNode* &child2,
               QuadTreeNode* &child3, QuadTreeNode* &child4) {
   LVecBase2 center = (_min + _max) / 2;
-  child1 = new HeightfieldQuad(center, _min);
+  child1 = new HeightfieldQuad(_min, center);
   child2 = new HeightfieldQuad(center, _max);
-  std::swap(_min[0], _max[0]);
-  child3 = new HeightfieldQuad(center, _min);
+  child3 = new HeightfieldQuad(_min, center);
+  static_cast<HeightfieldQuad*>(child3)->get_min()[1] = center[1];
+  static_cast<HeightfieldQuad*>(child3)->get_max()[1] = _max[1];
   child4 = new HeightfieldQuad(center, _max);
+  static_cast<HeightfieldQuad*>(child4)->get_min()[0] = center[0];
+  static_cast<HeightfieldQuad*>(child4)->get_max()[0] = _max[0];
 }
 
 /**
@@ -62,16 +65,16 @@ get_max_height() const {
 /**
  *
  */
-INLINE const LVecBase2& HeightfieldQuad::
-get_min() const {
+INLINE LVecBase2& HeightfieldQuad::
+get_min() {
   return _min;
 }
 
 /**
  *
  */
-INLINE const LVecBase2& HeightfieldQuad::
-get_max() const {
+INLINE LVecBase2& HeightfieldQuad::
+get_max() {
   return _max;
 }
 

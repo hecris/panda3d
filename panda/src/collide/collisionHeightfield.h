@@ -42,8 +42,8 @@ class HeightfieldQuad : public QuadTreeNode {
     INLINE PN_stdfloat get_max_height() const;
     INLINE void set_max_height(PN_stdfloat height_max);
 
-    INLINE const LVecBase2& get_min() const;
-    INLINE const LVecBase2& get_max() const;
+    INLINE LVecBase2& get_min();
+    INLINE LVecBase2& get_max();
     INLINE PN_stdfloat get_area() const;
 
   private:
@@ -60,9 +60,12 @@ PUBLISHED:
   virtual LPoint3 get_collision_origin() const;
 
 private:
+  typedef QuadTreeIterator iterator;
   PNMImage _heightfield;
   PN_stdfloat _max_height;
   QuadTree* _quadtree;
+
+  void fill_quadtree_heights();
 
 protected:
   virtual PT(CollisionEntry)

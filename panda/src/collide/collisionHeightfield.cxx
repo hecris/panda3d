@@ -40,8 +40,7 @@ TypeHandle CollisionHeightfield::_type_handle;
 CollisionHeightfield::
 CollisionHeightfield(PNMImage heightfield, PN_stdfloat max_height):
 _heightfield(heightfield),
-_max_height(max_height)
-{
+_max_height(max_height) {
   unsigned int x = heightfield.get_x_size();
   unsigned int y = heightfield.get_y_size();
 
@@ -49,6 +48,42 @@ _max_height(max_height)
                                               LVecBase2(x, y));
   _quadtree = new QuadTree(root);
   _quadtree->subdivide(3);
+  fill_quadtree_heights();
+}
+
+/**
+ *
+ */
+void CollisionHeightfield::
+fill_quadtree_heights() {
+  HeightfieldQuad* node = nullptr;
+  QuadTreeNode* child = nullptr;
+
+  for (iterator iter = _quadtree->end(); iter-- != _quadtree->begin();) {
+    PN_stdfloat height_min = DBL_MAX;
+    PN_stdfloat height_max = DBL_MIN;
+
+    node = static_cast<HeightfieldQuad*>(iter.get_current_node());
+
+    if (iter.is_at_leaf()) {
+      for (size_t x = node->get_min()[0]; x < node->get_max()[0]; x++) {
+        for (size_t y = node->get_min()[1]; y < node->get_max()[1]; y++) {
+          PN_stdfloat value = _heightfield.get_gray(x, y) * _max_height;
+          height_min = min(height_min, value);
+          height_max = max(height_max, value);
+        }
+      }
+    }
+    else {
+      for (unsigned int i = 0; i < 4; i++) {
+        iter.get_child_node(i, child);
+        height_min = min(height_min, static_cast<HeightfieldQuad*>(child)->get_min_height());
+        height_max = max(height_max, static_cast<HeightfieldQuad*>(child)->get_max_height());
+      }
+    }
+    node->set_min_height(height_min);
+    node->set_max_height(height_max);
+  }
 }
 
 
@@ -104,11 +139,11 @@ get_collision_origin() const {
 
 PT(BoundingVolume) CollisionHeightfield::
 compute_internal_bounds() const {
-  LPoint2 min = {0, 0, 0};
-  LPoint2 max = {_heightfield.get_x_size(),
-                 _heightfield.get_y_size(), max_height};
+  LPoint3 min = {0, 0, 0};
+  LPoint3 max = {_heightfield.get_x_size(),
+                 _heightfield.get_y_size(), _max_height};
 
-  return new BoundingBox();
+  return new BoundingBox(min, max);
 }
 
 PStatCollector &CollisionHeightfield::

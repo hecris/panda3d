@@ -91,39 +91,6 @@ class QuadTreeIterator {
     QuadTree* _tree;
 };
 
-class Rectangle : public QuadTreeNode {
-  /**
-   * A derived QuadTreeNode that represents a Rectangle,
-   * which is a common use case.
-   */
-  public:
-    Rectangle(LVecBase2 min, LVecBase2 max):
-    _min(min),
-    _max(max)
-    {}
-
-    /**
-     * Returns 4 new Rectangle objects resulting from
-     * dividing this Rectangle into four sub-rectangles.
-     */
-    virtual void make_children(QuadTreeNode* &child1,
-                               QuadTreeNode* &child2,
-                               QuadTreeNode* &child3,
-                               QuadTreeNode* &child4) override {
-      LVecBase2 center = (_min + _max) / 2;
-      child1 = new Rectangle(center, _min);
-      child2 = new Rectangle(center, _max);
-      std::swap(_min[0], _max[0]);
-      child3 = new Rectangle(center, _min);
-      child4 = new Rectangle(center, _max);
-    }
-
-  private:
-    LVecBase2 _min;
-    LVecBase2 _max;
-
-};
-
 #include "quadTree.I"
 
 #endif
